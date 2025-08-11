@@ -66,6 +66,8 @@
     ".next/cache"
   ],
   "dependencies": {
+    "@ai-sdk/openai": "^2.0.9",
+    "@ai-sdk/rsc": "^1.0.9",
     "@clickhouse/client": "^1.10.1",
     "@date-fns/utc": "^1.2.0",
     "@dicebear/collection": "^9.2.1",
