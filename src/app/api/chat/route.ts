@@ -7,6 +7,7 @@ import { getPageViewsTool } from '@/app/chat/tools/get-page-views';
 import { getDetailedPageViewsTool } from '@/app/chat/tools/get-detailed-page-views';
 import { getUserBehaviorTool } from '@/app/chat/tools/get-user-behavior';
 import { getRetentionTool } from '@/app/chat/tools/get-retention';
+import { getWebStatisticTool } from '@/app/chat/tools/get-web-statistic';
 
 export const maxDuration = 30;
 
@@ -39,6 +40,11 @@ export async function POST(req: Request) {
       description: getRetentionTool.description,
       inputSchema: getRetentionTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getRetentionTool.execute(params),
+    }),
+    'get-web-statistic': (tool as any)({
+      description: getWebStatisticTool.description,
+      inputSchema: getWebStatisticTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getWebStatisticTool.execute(params),
     }),
     'set-active-website': (tool as any)({
       description: setActiveWebsiteTool.description,
