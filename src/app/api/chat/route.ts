@@ -5,6 +5,7 @@ import { getActiveUsersTool } from '@/app/chat/tools/get-active-users';
 import { setActiveWebsiteTool } from '@/app/chat/tools/set-active-website';
 import { getPageViewsTool } from '@/app/chat/tools/get-page-views';
 import { getDetailedPageViewsTool } from '@/app/chat/tools/get-detailed-page-views';
+import { getUserBehaviorTool } from '@/app/chat/tools/get-user-behavior';
 
 export const maxDuration = 30;
 
@@ -27,6 +28,11 @@ export async function POST(req: Request) {
       description: getDetailedPageViewsTool.description,
       inputSchema: getDetailedPageViewsTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getDetailedPageViewsTool.execute(params),
+    }),
+    'get-user-behavior': (tool as any)({
+      description: getUserBehaviorTool.description,
+      inputSchema: getUserBehaviorTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getUserBehaviorTool.execute(params),
     }),
     'set-active-website': (tool as any)({
       description: setActiveWebsiteTool.description,

@@ -23,6 +23,7 @@ export * from '@/queries/sql/reports/getUTM';
 export * from '@/queries/sql/pageviews/getPageviewMetrics';
 export * from '@/queries/sql/pageviews/getPageviewStats';
 export * from '@/queries/sql/pageviews/getDetailedPageviewMetrics';
+export * from '@/queries/sql/user/getUserBehaviorMetrics';
 export * from '@/queries/sql/sessions/createSession';
 export * from '@/queries/sql/sessions/getWebsiteSession';
 export * from '@/queries/sql/sessions/getSessionData';
