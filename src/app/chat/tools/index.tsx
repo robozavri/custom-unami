@@ -2,6 +2,7 @@ import React from 'react';
 import { getActiveUsersTool } from './get-active-users';
 import { setActiveWebsiteTool } from './set-active-website';
 import { getPageViewsTool } from './get-page-views';
+import { getDetailedPageViewsTool } from './get-detailed-page-views';
 
 // Render tools for streamUI: description, parameters (zod), and async generate that returns ReactNode
 
@@ -72,6 +73,40 @@ export const chatTools: Record<string, any> = {
         return (
           <div style={{ color: '#b91c1c', background: '#fee2e2', padding: 8, borderRadius: 6 }}>
             Tool error (get-page-views): {message}
+          </div>
+        );
+      }
+    },
+  },
+  [getDetailedPageViewsTool.name]: {
+    description: getDetailedPageViewsTool.description,
+    parameters: {
+      type: 'object',
+      properties: {
+        websiteId: { type: 'string' },
+        days: { type: 'number', minimum: 1, default: 7 },
+        date_from: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+        date_to: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+        path: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+    generate: async (params: unknown) => {
+      try {
+        const result = await getDetailedPageViewsTool.execute(params);
+        return (
+          <div style={{ padding: 8 }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Detailed page views</div>
+            <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          </div>
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return (
+          <div style={{ color: '#b91c1c', background: '#fee2e2', padding: 8, borderRadius: 6 }}>
+            Tool error (get-detailed-page-views): {message}
           </div>
         );
       }

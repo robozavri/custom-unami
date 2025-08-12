@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getActiveUsersTool } from '@/app/chat/tools/get-active-users';
 import { setActiveWebsiteTool } from '@/app/chat/tools/set-active-website';
 import { getPageViewsTool } from '@/app/chat/tools/get-page-views';
+import { getDetailedPageViewsTool } from '@/app/chat/tools/get-detailed-page-views';
 
 export const maxDuration = 30;
 
@@ -21,6 +22,11 @@ export async function POST(req: Request) {
       description: getPageViewsTool.description,
       inputSchema: getPageViewsTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getPageViewsTool.execute(params),
+    }),
+    'get-detailed-page-views': (tool as any)({
+      description: getDetailedPageViewsTool.description,
+      inputSchema: getDetailedPageViewsTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getDetailedPageViewsTool.execute(params),
     }),
     'set-active-website': (tool as any)({
       description: setActiveWebsiteTool.description,
