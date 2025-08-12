@@ -9,6 +9,7 @@ import { getUserBehaviorTool } from '@/app/chat/tools/get-user-behavior';
 import { getRetentionTool } from '@/app/chat/tools/get-retention';
 import { getWebStatisticTool } from '@/app/chat/tools/get-web-statistic';
 import { getWebAnalyticsBreakdownTool } from '@/app/chat/tools/get-web-analytics-breakdown';
+import { getPathTableTool } from '@/app/chat/tools/get-path-table';
 
 export const maxDuration = 30;
 
@@ -56,6 +57,11 @@ export async function POST(req: Request) {
       description: setActiveWebsiteTool.description,
       inputSchema: setActiveWebsiteTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => setActiveWebsiteTool.execute(params),
+    }),
+    'get-path-table': (tool as any)({
+      description: getPathTableTool.description,
+      inputSchema: getPathTableTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getPathTableTool.execute(params),
     }),
   };
 

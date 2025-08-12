@@ -27,6 +27,7 @@ export * from '@/queries/sql/user/getUserBehaviorMetrics';
 export * from '@/queries/sql/reports/getRetentionMetrics';
 export * from '@/queries/sql/reports/getWebStatistics';
 export * from '@/queries/sql/reports/getWebAnalyticsBreakdown';
+export * from '@/queries/sql/reports/getPathTable';
 export * from '@/queries/sql/sessions/createSession';
 export * from '@/queries/sql/sessions/getWebsiteSession';
 export * from '@/queries/sql/sessions/getSessionData';
