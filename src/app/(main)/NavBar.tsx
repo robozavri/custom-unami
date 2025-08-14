@@ -24,6 +24,7 @@ export function NavBar() {
     { label: formatMessage(labels.dashboard), url: renderTeamUrl('/dashboard') },
     { label: formatMessage(labels.websites), url: renderTeamUrl('/websites') },
     { label: formatMessage(labels.reports), url: renderTeamUrl('/reports') },
+    { label: formatMessage(labels.chat), url: '/chat' },
     { label: formatMessage(labels.settings), url: renderTeamUrl('/settings') },
   ].filter(n => n);
 
@@ -31,6 +32,18 @@ export function NavBar() {
     {
       label: formatMessage(labels.dashboard),
       url: renderTeamUrl('/dashboard'),
+    },
+    {
+      label: formatMessage(labels.websites),
+      url: renderTeamUrl('/websites'),
+    },
+    {
+      label: formatMessage(labels.reports),
+      url: renderTeamUrl('/reports'),
+    },
+    {
+      label: formatMessage(labels.chat),
+      url: '/chat',
     },
     !cloudMode && {
       label: formatMessage(labels.settings),
