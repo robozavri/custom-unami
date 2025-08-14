@@ -10,6 +10,7 @@ import { getRetentionTool } from '@/app/chat/tools/get-retention';
 import { getWebStatisticTool } from '@/app/chat/tools/get-web-statistic';
 import { getWebAnalyticsBreakdownTool } from '@/app/chat/tools/get-web-analytics-breakdown';
 import { getPathTableTool } from '@/app/chat/tools/get-path-table';
+import { getCountryTableTool } from '@/app/chat/tools/get-country-table';
 
 export const maxDuration = 30;
 
@@ -62,6 +63,11 @@ export async function POST(req: Request) {
       description: getPathTableTool.description,
       inputSchema: getPathTableTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getPathTableTool.execute(params),
+    }),
+    'get-country-table': (tool as any)({
+      description: getCountryTableTool.description,
+      inputSchema: getCountryTableTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getCountryTableTool.execute(params),
     }),
   };
 
