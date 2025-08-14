@@ -131,6 +131,12 @@
       "value": "Skift loyniorð"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Tal"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

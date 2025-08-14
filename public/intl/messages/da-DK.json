@@ -131,6 +131,12 @@
       "value": "Skift adgangskode"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Chat"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

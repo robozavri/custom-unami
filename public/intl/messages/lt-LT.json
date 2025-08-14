@@ -131,6 +131,12 @@
       "value": "Pakeisti slaptažodį"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Pokalbis"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

@@ -131,6 +131,12 @@
       "value": "මුරපදය වෙනස් කරන්න"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "චැට්"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

@@ -20,6 +20,7 @@
   "label.browser": "Nettleser",
   "label.browsers": "Nettlesere",
   "label.cancel": "Avvis",
+  "label.chat": "Chat",
   "label.change-password": "Bytt passord",
   "label.cities": "Byer",
   "label.city": "By",
@@ -276,5 +277,4 @@
   "message.viewed-page": "Vist side",
   "message.visitor-log": "Besøkende fra {country} med {browser} på {os} {device}",
   "message.visitors-dropped-off": "Besøkende falt fra"
-
 }

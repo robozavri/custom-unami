@@ -131,6 +131,12 @@
       "value": "Нууц үг солих"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Чат"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

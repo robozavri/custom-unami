@@ -131,6 +131,12 @@
       "value": "パスワードの変更"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "チャット"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

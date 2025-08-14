@@ -131,6 +131,12 @@
       "value": "Αλλαγή κωδικού"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Συνομιλία"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

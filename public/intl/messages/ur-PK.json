@@ -131,6 +131,12 @@
       "value": "پاس ورڈ تبدیل کریں"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "چیٹ"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

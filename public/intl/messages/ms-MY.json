@@ -131,6 +131,12 @@
       "value": "Tukar kata laluan"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Sembang"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

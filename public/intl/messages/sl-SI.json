@@ -131,6 +131,12 @@
       "value": "Zamenjaj geslo"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Pogovor"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

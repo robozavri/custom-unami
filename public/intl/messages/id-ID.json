@@ -131,6 +131,12 @@
       "value": "Ganti kata sandi"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Obrolan"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

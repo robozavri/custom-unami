@@ -131,6 +131,12 @@
       "value": "Смени парола"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Чат"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

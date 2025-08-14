@@ -131,6 +131,12 @@
       "value": "שינוי סיסמה"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "צ'אט"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

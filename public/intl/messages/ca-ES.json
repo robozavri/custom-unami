@@ -131,6 +131,12 @@
       "value": "Canvia la contrasenya"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Xat"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

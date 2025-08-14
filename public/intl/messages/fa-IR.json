@@ -131,6 +131,12 @@
       "value": "تغییر رمز"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "چت"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

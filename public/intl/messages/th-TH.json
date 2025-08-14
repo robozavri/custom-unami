@@ -131,6 +131,12 @@
       "value": "เปลี่ยนรหัสผ่าน"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "แชท"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

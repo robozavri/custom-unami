@@ -131,6 +131,12 @@
       "value": "Byt lösenord"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Chatt"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

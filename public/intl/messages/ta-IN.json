@@ -131,6 +131,12 @@
       "value": "கடவுச்சொல்லை மாற்று"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "அரட்டை"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

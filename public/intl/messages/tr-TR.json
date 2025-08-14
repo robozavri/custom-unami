@@ -131,6 +131,12 @@
       "value": "Şifre değiştir"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Sohbet"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

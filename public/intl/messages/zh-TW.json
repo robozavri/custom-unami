@@ -131,6 +131,12 @@
       "value": "更改密碼"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "聊天"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

@@ -137,6 +137,12 @@
       "value": "渠道"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "聊天"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

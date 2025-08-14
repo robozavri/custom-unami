@@ -131,6 +131,12 @@
       "value": "पासवर्ड बदलें"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "चैट"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

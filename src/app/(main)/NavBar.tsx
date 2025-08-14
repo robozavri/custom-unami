@@ -18,7 +18,7 @@ export function NavBar() {
   const { pathname, router } = useNavigation();
   const { teamId, renderTeamUrl } = useTeamUrl();
 
-  const cloudMode = !!process.env.cloudMode;
+  const cloudMode = !!process.env.CLOUD_MODE;
 
   const links = [
     { label: formatMessage(labels.dashboard), url: renderTeamUrl('/dashboard') },
@@ -45,7 +45,7 @@ export function NavBar() {
       label: formatMessage(labels.chat),
       url: '/chat',
     },
-    !cloudMode && {
+    {
       label: formatMessage(labels.settings),
       url: renderTeamUrl('/settings'),
       children: [

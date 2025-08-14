@@ -6,6 +6,7 @@ export const labels = defineMessages({
   required: { id: 'label.required', defaultMessage: 'Required' },
   save: { id: 'label.save', defaultMessage: 'Save' },
   cancel: { id: 'label.cancel', defaultMessage: 'Cancel' },
+  chat: { id: 'label.chat', defaultMessage: 'Chat' },
   continue: { id: 'label.continue', defaultMessage: 'Continue' },
   delete: { id: 'label.delete', defaultMessage: 'Delete' },
   leave: { id: 'label.leave', defaultMessage: 'Leave' },

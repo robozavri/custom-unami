@@ -131,6 +131,12 @@
       "value": "စကားဝှက် ပြောင်းမည်"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "ချက်တ်"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

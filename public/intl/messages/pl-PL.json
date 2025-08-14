@@ -131,6 +131,12 @@
       "value": "Zmień hasło"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Czat"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,

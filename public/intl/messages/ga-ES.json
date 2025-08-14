@@ -131,6 +131,12 @@
       "value": "Mudar contrasinal"
     }
   ],
+  "label.chat": [
+    {
+      "type": 0,
+      "value": "Comhrá"
+    }
+  ],
   "label.cities": [
     {
       "type": 0,
