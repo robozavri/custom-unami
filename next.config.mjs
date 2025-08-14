@@ -185,6 +185,7 @@ export default {
     cloudUrl,
     currentVersion: pkg.version,
     defaultLocale,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   },
   basePath,
   output: 'standalone',

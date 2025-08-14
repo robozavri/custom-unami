@@ -4,6 +4,7 @@ services:
       context: .
       args:
         DATABASE_TYPE: postgresql
+        OPENAI_API_KEY: "yC8cI1hwNRm8WbXTkPOdgnt4"
     image: umami:custom
     pull_policy: never
     environment:

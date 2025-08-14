@@ -15,6 +15,19 @@ import { getCountryTableTool } from '@/app/chat/tools/get-country-table';
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
+  // Check if OpenAI API key is available
+  if (!process.env.OPENAI_API_KEY) {
+    return new Response(
+      JSON.stringify({
+        error: 'Missing OPENAI_API_KEY. Set it in your environment and restart the server.',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
+  }
+
   const { messages }: { messages: UIMessage[] } = await req.json();
 
   // Prevent deep generic inference by isolating tools in an 'any'-typed object
