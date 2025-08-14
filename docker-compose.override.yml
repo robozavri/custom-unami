@@ -9,6 +9,7 @@ services:
     environment:
       DATABASE_URL: postgresql://umami:umami@db:5432/umami
       DATABASE_TYPE: postgresql
+      OPENAI_API_KEY: "yC8cI1hwNRm8WbXTkPOdgnt4"
       APP_SECRET: change-me-to-a-strong-random-string
     ports:
       - "127.0.0.1:3000:3000"
