@@ -4,12 +4,14 @@ services:
       context: .
       args:
         DATABASE_TYPE: postgresql
+        OPENAI_API_KEY: ${OPENAI_API_KEY}
     image: umami:custom
     pull_policy: never
     environment:
       DATABASE_URL: postgresql://umami:umami@db:5432/umami
       DATABASE_TYPE: postgresql
       APP_SECRET: change-me-to-a-strong-random-string
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:

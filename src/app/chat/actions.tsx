@@ -54,7 +54,9 @@ Remember: You are an analytics expert. Every answer must be grounded in actual d
     const result = await streamUI({
       model: openai('gpt-4o'),
       initial: <Loading />,
-      prompt: `${toolInstruction}\n\nUser: ${prompt}`,
+      system: toolInstruction,
+      prompt: prompt,
+      // prompt: `\n\nUser: ${prompt}`,
       tools: chatTools as any,
       text: ({ content }) => <div>{content}</div>,
     });
