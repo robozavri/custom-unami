@@ -1,12 +1,61 @@
 import React from 'react';
+import { tool } from 'ai';
 import { getActiveUsersTool } from './get-active-users';
 import { setActiveWebsiteTool } from './set-active-website';
 import { getPageViewsTool } from './get-page-views';
 import { getDetailedPageViewsTool } from './get-detailed-page-views';
 
-// Render tools for streamUI: description, parameters (zod), and async generate that returns ReactNode
+// Modern AI SDK format - directly compatible with streamUI, generateText, etc.
+export const chatTools = {
+  'get-active-users': tool({
+    description: getActiveUsersTool.description,
+    inputSchema: getActiveUsersTool.inputSchema,
+    execute: async params => {
+      const result = await getActiveUsersTool.execute(params);
+      return {
+        interval: result.interval,
+        date_from: result.date_from,
+        date_to: result.date_to,
+        data: result.data,
+      };
+    },
+  }),
 
-export const chatTools: Record<string, any> = {
+  'get-page-views': tool({
+    description: getPageViewsTool.description,
+    inputSchema: getPageViewsTool.inputSchema,
+    execute: async params => {
+      const result = await getPageViewsTool.execute(params);
+      return {
+        days: result.days,
+        date_from: result.date_from,
+        date_to: result.date_to,
+        data: result.data,
+      };
+    },
+  }),
+
+  'get-detailed-page-views': tool({
+    description: getDetailedPageViewsTool.description,
+    inputSchema: getDetailedPageViewsTool.inputSchema,
+    execute: async params => {
+      const result = await getDetailedPageViewsTool.execute(params);
+      return result;
+    },
+  }),
+
+  'set-active-website': tool({
+    description: setActiveWebsiteTool.description,
+    inputSchema: setActiveWebsiteTool.inputSchema,
+    execute: async params => {
+      const result = await setActiveWebsiteTool.execute(params);
+      return result;
+    },
+  }),
+};
+
+// Legacy format for backward compatibility with existing chat UI
+export const chatToolsLegacy: Record<string, any> = {
   [getActiveUsersTool.name]: {
     description: getActiveUsersTool.description,
     parameters: {
