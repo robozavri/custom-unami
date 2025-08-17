@@ -4,6 +4,9 @@ import { parseISO, subDays, startOfWeek, formatISO } from 'date-fns';
 import { DEFAULT_WEBSITE_ID } from '../config';
 import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
 import prisma from '@/lib/prisma';
+import debug from 'debug';
+
+const log = debug('umami:getActiveUsers');
 
 const paramsSchema = z.object({
   websiteId: z.string().optional(),
@@ -66,6 +69,7 @@ export const getActiveUsersTool = {
 `.trim(),
   inputSchema: paramsSchema,
   execute: async (rawParams: unknown) => {
+    log('[start]', { rawParams });
     const {
       websiteId: websiteIdInput,
       interval,

@@ -1,0 +1,109 @@
+import debug from 'debug';
+import { z } from 'zod';
+import { tool } from 'ai';
+
+// Import tool objects (server-side executors)
+import { getActiveUsersTool } from './get-active-users';
+import { setActiveWebsiteTool } from './set-active-website';
+import { getPageViewsTool } from './get-page-views';
+import { getDetailedPageViewsTool } from './get-detailed-page-views';
+import { getUserBehaviorTool } from './get-user-behavior';
+import { getRetentionTool } from './get-retention';
+import { getWebStatisticTool } from './get-web-statistic';
+import { getWebAnalyticsBreakdownTool } from './get-web-analytics-breakdown';
+import { getPathTableTool } from './get-path-table';
+import { getCountryTableTool } from './get-country-table';
+import { getDetectTimeseriesAnomaliesTool } from './anomaly-insights';
+
+const log = debug('umami:chat:tools');
+
+// Central builder for the chat tools map used by the API route and any other consumers
+export function buildToolsMap(): Record<string, any> {
+  return {
+    'get-active-users': (tool as any)({
+      description: getActiveUsersTool.description,
+      inputSchema: getActiveUsersTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getActiveUsersTool.execute(params),
+    }),
+    'get-page-views': (tool as any)({
+      description: getPageViewsTool.description,
+      inputSchema: getPageViewsTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getPageViewsTool.execute(params),
+    }),
+    'get-detailed-page-views': (tool as any)({
+      description: getDetailedPageViewsTool.description,
+      inputSchema: getDetailedPageViewsTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getDetailedPageViewsTool.execute(params),
+    }),
+    'get-user-behavior': (tool as any)({
+      description: getUserBehaviorTool.description,
+      inputSchema: getUserBehaviorTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getUserBehaviorTool.execute(params),
+    }),
+    'get-retention': (tool as any)({
+      description: getRetentionTool.description,
+      inputSchema: getRetentionTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getRetentionTool.execute(params),
+    }),
+    'get-web-statistic': (tool as any)({
+      description: getWebStatisticTool.description,
+      inputSchema: getWebStatisticTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getWebStatisticTool.execute(params),
+    }),
+    'get-web-analytics-breakdown': (tool as any)({
+      description: getWebAnalyticsBreakdownTool.description,
+      inputSchema: getWebAnalyticsBreakdownTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getWebAnalyticsBreakdownTool.execute(params),
+    }),
+    'set-active-website': (tool as any)({
+      description: setActiveWebsiteTool.description,
+      inputSchema: setActiveWebsiteTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => setActiveWebsiteTool.execute(params),
+    }),
+    'get-pathTable': (tool as any)({
+      description: getPathTableTool.description,
+      inputSchema: getPathTableTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getPathTableTool.execute(params),
+    }),
+    'get-country-table': (tool as any)({
+      description: getCountryTableTool.description,
+      inputSchema: getCountryTableTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getCountryTableTool.execute(params),
+    }),
+    'get-detect-timeseries-anomalies': (tool as any)({
+      description: getDetectTimeseriesAnomaliesTool.description,
+      inputSchema: getDetectTimeseriesAnomaliesTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => {
+        log('invoke get-detect-timeseries-anomalies', params);
+        // eslint-disable-next-line no-console
+        console.log('[tools][invoke] get-detect-timeseries-anomalies', params);
+        try {
+          const result = await getDetectTimeseriesAnomaliesTool.execute(params);
+          log('result get-detect-timeseries-anomalies', {
+            hasSummaryKeys: result ? Object.keys(result).length : 0,
+            anomalies: Array.isArray((result as any)?.anomalies)
+              ? (result as any).anomalies.length
+              : null,
+            series: Array.isArray((result as any)?.series) ? (result as any).series.length : null,
+          });
+          // eslint-disable-next-line no-console
+          console.log('[tools][result] get-detect-timeseries-anomalies', {
+            hasSummaryKeys: result ? Object.keys(result).length : 0,
+            anomalies: Array.isArray((result as any)?.anomalies)
+              ? (result as any).anomalies.length
+              : null,
+            series: Array.isArray((result as any)?.series) ? (result as any).series.length : null,
+          });
+          return result;
+        } catch (error) {
+          log('error get-detect-timeseries-anomalies', error);
+          // eslint-disable-next-line no-console
+          console.error('[tools][error] get-detect-timeseries-anomalies', error);
+          throw error;
+        }
+      },
+    }),
+  };
+}
+
+export type BuiltToolsMap = ReturnType<typeof buildToolsMap>;

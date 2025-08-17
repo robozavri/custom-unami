@@ -1,0 +1,139 @@
+Add a single “anomaly-insights” meta-tool that orchestrates the specialized tools below and returns a short list of human-readable insights + machine-readable details.
+
+Under it, implement 6 small tools:
+
+1) time-series anomaly detector, 
+2) path drop-off detector, 
+3) segment shift detector, 
+4) retention dip detector, 
+5) error/spike detector (if you track error events), 
+6) revenue anomaly detector (optional, if you send revenue events).
+
+
+Let make first tool from list above:
+
+1) detect-timeseries-anomalies
+
+Purpose: Run the sub-tools below for the selected range & granularity; deduplicate and rank findings by severity & effect size.
+
+Input: 
+{
+  "websiteId": "uuid (optional; defaults to active)",
+  "date_from": "YYYY-MM-DD",
+  "date_to": "YYYY-MM-DD",
+  "interval": "hour|day|week",
+  "sensitivity": "low|medium|high", 
+  "min_effect_size": 0.1, 
+  "segments": ["country","device","browser","utm_source","referrer_domain","path"]
+}
+
+
+output:
+{
+  "summary": "string",
+  "findings": [
+    {
+      "type": "anomaly|dropoff|shift|retention_dip|error_spike|revenue_anomaly",
+      "metric": "visits|views|bounce_rate|conv_rate|retention|revenue|…",
+      "interval": "2025-08-10",
+      "value": 1234,
+      "expected": 820,
+      "z": 3.1,
+      "effect_size": 0.50,
+      "segment": {"country":"US", "path":"/pricing"},
+      "explanation": "human friendly sentence",
+      "recommended_checks": ["inspect /pricing speed", "review US paid traffic"]
+    }
+  ]
+}
+
+How it works: Calls the 6 sub-tools below, merges results, ranks by |value-expected|/max(1,expected) and z-score, and emits a concise summary.
+
+1) detect-timeseries-anomalies
+
+Purpose: Spot spikes/dips in visits, pageviews, bounce rate, avg visit duration on an hourly/daily/weekly basis.
+
+Inputs:
+{
+  "metric": "visits|pageviews|bounce_rate|visit_duration",
+  "websiteId": "uuid (optional)",
+  "date_from": "YYYY-MM-DD",
+  "date_to": "YYYY-MM-DD",
+  "interval": "hour|day|week",
+  "sensitivity": "low|medium|high"
+}
+
+Method (formula)
+Use a robust baseline + z-scores:
+
+Compute series y_t.
+
+Rolling baseline: μ_t = median(y_{t-7..t-1}), σ_t = 1.4826 * MAD(y_{t-7..t-1}) (MAD = median absolute deviation).
+
+Anomaly if |y_t - μ_t| / (σ_t + ε) >= k, where k = 3 (low), 2.5 (med), 2 (high).
+
+Key derived metrics
+
+Visits: countDistinct(visit_id)
+
+Pageviews: sum(views) or countIf(event_type=1)
+
+Bounce rate (per bucket): bounces / visits, where bounces = countDistinct(visit_id) with views==1.
+
+Avg visit duration: (sum(visit_duration_seconds) / visits); if you don’t store duration explicitly, approximate by (max_time - min_time) per visit with single-page visits treated as 0.
+
+ClickHouse sketch (daily visits)  (but make it as database agnostic query):
+/* daily visit counts */
+SQL: 
+WITH
+  toDate(created_at) AS d
+SELECT
+  d AS bucket,
+  countDistinct(visit_id) AS visits
+FROM umami.website_event
+WHERE website_id = {websiteId:UUID}
+  AND created_at >= parseDateTimeBestEffort('{date_from}')
+  AND created_at <  parseDateTimeBestEffort('{date_to}') + INTERVAL 1 DAY
+GROUP BY bucket
+ORDER BY bucket;
+
+For bounce rate, aggregate per (visit_id, bucket) then count visits with total views = 1:
+
+SQL:
+WITH
+  toDate(created_at) AS d
+SELECT
+  d AS bucket,
+  uniq(visit_id) AS visits,
+  countIf(views_per_visit = 1) AS bounces,
+  bounces / nullIf(visits,0) AS bounce_rate
+FROM (
+  SELECT
+    visit_id, d,
+    sumIf(1, event_type = 1) AS views_per_visit,
+    min(created_at) AS min_time,
+    max(created_at) AS max_time
+  FROM umami.website_event
+  WHERE website_id = {websiteId:UUID}
+    AND created_at >= parseDateTimeBestEffort('{date_from}')
+    AND created_at <  parseDateTimeBestEffort('{date_to}') + INTERVAL 1 DAY
+  GROUP BY visit_id, d
+)
+GROUP BY bucket
+ORDER BY bucket;
+
+output: 
+{
+  "anomalies": [
+    { "bucket":"2025-08-10", "metric":"visits", "value":1400, "expected":820, "z":3.2, "direction":"spike" }
+  ],
+  "series": [{ "bucket":"2025-08-01", "value":... }, ...]
+}
+
+Schema reference: hourly materialized stats and base event table fields (visit/session ids, event_type, timestamps) used above. 
+Fossies
+
+Metric definitions (bounce rate etc.)
+
+When you get to this first tool, ask me and we'll move on to the next tool: the path drop-off detector.
+
