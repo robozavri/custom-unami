@@ -14,6 +14,7 @@ import { getWebAnalyticsBreakdownTool } from './get-web-analytics-breakdown';
 import { getPathTableTool } from './get-path-table';
 import { getCountryTableTool } from './get-country-table';
 import { getDetectTimeseriesAnomaliesTool } from './anomaly-insights';
+import { getDetectPathDropoffsTool } from './anomaly-insights';
 
 const log = debug('umami:chat:tools');
 
@@ -99,6 +100,37 @@ export function buildToolsMap(): Record<string, any> {
           log('error get-detect-timeseries-anomalies', error);
           // eslint-disable-next-line no-console
           console.error('[tools][error] get-detect-timeseries-anomalies', error);
+          throw error;
+        }
+      },
+    }),
+    'get-detect-path-dropoffs': (tool as any)({
+      description: getDetectPathDropoffsTool.description,
+      inputSchema: getDetectPathDropoffsTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => {
+        log('invoke get-detect-path-dropoffs', params);
+        // eslint-disable-next-line no-console
+        console.log('[tools][invoke] get-detect-path-dropoffs', params);
+        try {
+          const result = await getDetectPathDropoffsTool.execute(params);
+          log('result get-detect-path-dropoffs', {
+            hasSummaryKeys: result ? Object.keys(result).length : 0,
+            findings: Array.isArray((result as any)?.findings)
+              ? (result as any).findings.length
+              : null,
+          });
+          // eslint-disable-next-line no-console
+          console.log('[tools][result] get-detect-path-dropoffs', {
+            hasSummaryKeys: result ? Object.keys(result).length : 0,
+            findings: Array.isArray((result as any)?.findings)
+              ? (result as any).findings.length
+              : null,
+          });
+          return result;
+        } catch (error) {
+          log('error get-detect-path-dropoffs', error);
+          // eslint-disable-next-line no-console
+          console.error('[tools][error] get-detect-path-dropoffs', error);
           throw error;
         }
       },
