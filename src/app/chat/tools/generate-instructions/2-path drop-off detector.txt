@@ -1,0 +1,463 @@
+Tool name: get-detect-path-dropoffs
+
+Build a TypeScript tool named get-detect-path-dropoffs for Umami analytics.
+This tool analyzes navigation transitions within a date range and flags pages with unusually high exit rates or step drop-offs. All anomaly math must run in code; the DB layer provides only aggregated transitions.
+
+Goals
+
+Input: websiteId/date range/+ options → Output: list of drop-off findings.
+
+Database-agnostic: implement against an adapter interface; provide a Postgres adapter now, ClickHouse adapter stub for later.
+
+Robust, fast, and safe (parameterized SQL, no SQL injection).
+
+Include unit tests with synthetic data.
+
+Purpose: Find unusual drop-offs along common paths (home → pricing → signup), or within a single page (entry→exit).
+
+Method (formula)
+
+Build transitions per visit: (prev_url_path -> next_url_path).
+
+Compute transition probability P(next|current).
+
+Flag drop-off steps where exit rate increases above baseline (rolling median) by ≥ k * MAD or absolute conversion fall ≥ min_effect_size.
+
+Input: 
+{
+  "websiteId": "uuid (optional)",
+  "date_from": "YYYY-MM-DD",
+  "date_to": "YYYY-MM-DD",
+  "max_path_len": 3,
+  "min_support": 100
+}
+
+1) API & JSON Schema
+
+Create src/types.dropoffs.ts:
+export interface PathDropoffInput {
+  websiteId: string;             // required; caller passes active site id
+  date_from: string;             // "YYYY-MM-DD"
+  date_to: string;               // "YYYY-MM-DD"
+  timezone?: string;             // default "UTC"
+  min_support?: number;          // min #transitions from a path to be considered (default 100)
+  min_effect_size?: number;      // minimum delta vs baseline to flag (default 0.15 => 15pp)
+  sensitivity?: "low"|"medium"|"high"; // affects robust z threshold (low=3, med=2.5, high=2)
+  include_step_dropoffs?: boolean; // if true, also flag A->B probability dips (default true)
+  normalize_paths?: boolean;     // normalize trailing slash, lowercase, strip query/hash (default true)
+}
+
+export interface PathDropoffFinding {
+  type: "dropoff";
+  metric: "exit_rate" | "transition_rate";
+  path_sequence: string[];       // e.g., ["/pricing"] or ["/", "/signup"]
+  value: number;                 // observed rate (0..1)
+  expected: number;              // baseline rate (0..1)
+  effect_size: number;           // abs(value-expected)
+  z?: number;                    // robust z on cross-sectional distribution, if computed
+  support: number;               // denominator used (reaches for exit_rate, transitions for A->B)
+  explanation: string;           // human-friendly
+  recommended_checks: string[];  // e.g., "inspect UX", "check page speed", etc.
+}
+
+export interface PathDropoffOutput {
+  findings: PathDropoffFinding[];
+  summary: string;
+  extras?: {
+    exit_rates?: Array<{ path: string; rate: number; support: number }>;
+    transitions?: Array<{ from_path: string|null; to_path: string|null; transitions: number }>;
+  };
+}
+
+
+For Register tool schema:
+{
+  "name": "get-detect-path-dropoffs",
+  "description": "Finds unusual path-level drop-offs by analyzing page transitions and exits within a date range.",
+  "input_schema": {
+    "type": "object",
+    "required": ["websiteId", "date_from", "date_to"],
+    "properties": {
+      "websiteId": { "type": "string" },
+      "date_from": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+      "date_to": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+      "timezone": { "type": "string", "default": "UTC" },
+      "min_support": { "type": "number", "default": 100 },
+      "min_effect_size": { "type": "number", "default": 0.15 },
+      "sensitivity": { "type": "string", "enum": ["low","medium","high"], "default": "medium" },
+      "include_step_dropoffs": { "type": "boolean", "default": true },
+      "normalize_paths": { "type": "boolean", "default": true }
+    }
+  }
+}
+
+2) Adapter contract (DB-agnostic)
+
+Create src/adapters/base.ts:
+export interface TransitionRow {
+  from_path: string | null;  // null = entry to site
+  to_path: string | null;    // null = exit from site
+  transitions: number;       // count of edges observed in window
+}
+
+export interface TransitionsSource {
+  fetchTransitions(params: {
+    websiteId: string;
+    date_from: string;
+    date_to: string;
+    timezone?: string;
+    min_support?: number;    // adapter MAY pre-filter, but tool also filters
+    normalize_paths?: boolean;
+  }): Promise<TransitionRow[]>;
+}
+
+Postgres implementation (Dont forget you must write database agnostic query)
+Create src/adapters/postgres.ts using pg. Assume:
+Pageviews are events with event_type='pageview'.
+Columns: website_id (uuid), visit_id (text/uuid), created_at (timestamptz), url_path (text).
+Adjust table/column names via constructor options.
+/**
+ * SQL pattern (Postgres):
+ *
+ * WITH pv AS (
+ *   SELECT
+ *     visit_id,
+ *     date_trunc('second', created_at AT TIME ZONE $3) AS ts,
+ *     CASE WHEN $5 THEN normalize_path(url_path) ELSE url_path END AS path,
+ *     row_number() OVER (PARTITION BY visit_id ORDER BY created_at) AS rn
+ *   FROM events
+ *   WHERE website_id = $1
+ *     AND event_type = 'pageview'
+ *     AND created_at >= $2::timestamptz
+ *     AND created_at < ($4::timestamptz + interval '1 day')
+ * )
+ * SELECT
+ *   a.path AS from_path,
+ *   b.path AS to_path,
+ *   COUNT(*)::bigint AS transitions
+ * FROM pv a
+ * LEFT JOIN pv b
+ *   ON a.visit_id = b.visit_id AND b.rn = a.rn + 1
+ * GROUP BY a.path, b.path;
+ *
+ * Notes:
+ * - Implement normalize_path(path) in SQL or apply in JS before insert:
+ *   - lowercase, strip query/hash, collapse multiple slashes, trim trailing slash except "/".
+ */
+
+3) Detection formula (what “drop-off” means)
+
+We detect two related phenomena:
+
+(A) Exit-rate spikes per path (single-page drop-off)
+
+For each from_path:
+
+total_from = Σ transitions(from_path -> ANY)
+
+exits_from = transitions(from_path -> NULL)
+
+Exit rate:
+exit_rate(from_path) = exits_from / total_from
+
+Baseline for comparison (cross-sectional within the window):
+
+Let R = { exit_rate(p) | total_from(p) ≥ min_support }
+
+baseline = median(R)
+
+Also compute robust z-score across R:
+
+MAD = median(|r - median(R)|)
+
+z = (exit_rate - median(R)) / (1.4826 * MAD) (if MAD>0)
+
+Flag a path if:
+
+total_from ≥ min_support, and
+
+(exit_rate - baseline) ≥ min_effect_size, and
+
+|z| ≥ k where k = 3(low), 2.5(medium), 2(high).
+
+This spots pages whose exits are abnormally high compared to peers during the same window.
+
+(B) Step drop-offs (A → B transition probability dips)
+
+For each pair (A,B):
+
+P(B|A) = transitions(A→B) / total_from(A)
+
+Optional pair baseline (cross-sectional by “next step”):
+
+For fixed A, collect { P(X|A) for all X }.
+If there’s a known primary next step (e.g., from /pricing most users go to /signup historically), you can compare P(B|A) to the median P(X|A) or to a previous window (future enhancement).
+
+Flag (A→B) if:
+
+transitions(A→B) ≥ min_support_pair (use same min_support), and
+
+(baseline_for_A - P(B|A)) ≥ min_effect_size, and optionally
+
+robust z across {P(X|A)} exceeds k.
+
+This highlights a specific step that suddenly loses more users than the rest of choices from A.
+
+Why cross-sectional baseline (not historical)?
+It’s DB-agnostic and works with a single window. You can later add a previous window comparison without changing tool outputs.
+
+4) Implementation outline
+
+Create src/tools/checks/dropoffs.ts:
+
+import { PathDropoffInput, PathDropoffFinding, PathDropoffOutput } from "../../types.dropoffs";
+import { TransitionsSource, TransitionRow } from "../../adapters/base";
+
+// Small robust stats helpers:
+const median = (xs: number[]) => {
+  if (!xs.length) return 0;
+  const a = [...xs].sort((x,y)=>x-y);
+  const m = Math.floor(a.length/2);
+  return a.length % 2 ? a[m] : (a[m-1]+a[m]) / 2;
+};
+const mad = (xs: number[], m?: number) => {
+  const med = m ?? median(xs);
+  const devs = xs.map(v => Math.abs(v - med));
+  return median(devs);
+};
+const kFrom = (s: "low"|"medium"|"high" = "medium") => s==="low"?3:s==="high"?2:2.5;
+
+export async function detectPathDropoffs(
+  src: TransitionsSource,
+  input: PathDropoffInput
+): Promise<PathDropoffOutput> {
+  const min_support = input.min_support ?? 100;
+  const min_effect_size = input.min_effect_size ?? 0.15;
+  const k = kFrom(input.sensitivity ?? "medium");
+
+  const rows: TransitionRow[] = await src.fetchTransitions({
+    websiteId: input.websiteId,
+    date_from: input.date_from,
+    date_to: input.date_to,
+    timezone: input.timezone ?? "UTC",
+    min_support,
+    normalize_paths: input.normalize_paths ?? true,
+  });
+
+  // Aggregate totals and exits per from_path
+  const totals = new Map<string, number>();    // total transitions leaving from_path
+  const exits  = new Map<string, number>();    // transitions to null
+  const pair   = new Map<string, number>();    // key "A||B" -> transitions(A->B)
+
+  for (const r of rows) {
+    const A = (r.from_path ?? "__ENTRY__");
+    const B = (r.to_path   ?? "__EXIT__");
+    totals.set(A, (totals.get(A) ?? 0) + r.transitions);
+    if (B === "__EXIT__") exits.set(A, (exits.get(A) ?? 0) + r.transitions);
+    pair.set(`${A}||${B}`, (pair.get(`${A}||${B}`) ?? 0) + r.transitions);
+  }
+
+  // Build exit rates
+  const exitRates: Array<{ path: string; rate: number; support: number }> = [];
+  for (const [A, totalFrom] of totals.entries()) {
+    if (A === "__ENTRY__") continue; // not a path page
+    if (totalFrom < min_support) continue;
+    const exitCount = exits.get(A) ?? 0;
+    const rate = totalFrom > 0 ? exitCount / totalFrom : 0;
+    exitRates.push({ path: A, rate, support: totalFrom });
+  }
+
+  // Cross-sectional baseline & robust z
+  const values = exitRates.map(r => r.rate);
+  const baseMed = median(values);
+  const m = mad(values, baseMed);
+  const sigma = 1.4826 * m;
+
+  const findings: PathDropoffFinding[] = [];
+
+  for (const r of exitRates) {
+    const z = sigma > 0 ? (r.rate - baseMed) / sigma : 0;
+    const delta = r.rate - baseMed; // effect size in absolute points (0..1 space)
+    if (delta >= min_effect_size && Math.abs(z) >= k) {
+      findings.push({
+        type: "dropoff",
+        metric: "exit_rate",
+        path_sequence: [r.path],
+        value: r.rate,
+        expected: baseMed,
+        effect_size: delta,
+        z,
+        support: r.support,
+        explanation: `Exit rate on ${r.path} is ${(r.rate*100).toFixed(0)}% vs ${(baseMed*100).toFixed(0)}% baseline`,
+        recommended_checks: ["inspect UX & copy", "check page speed & errors", "review pricing or form friction"]
+      });
+    }
+  }
+
+  // Optional: Step drop-offs (A -> B)
+  if (input.include_step_dropoffs ?? true) {
+    // For each A, compute distribution { P(X|A) }; flag low P(B|A) vs median P(X|A)
+    const byA = new Map<string, Array<{ to: string; p: number; support: number }>>();
+    for (const [key, nAB] of pair.entries()) {
+      const [A, B] = key.split("||");
+      if (A === "__ENTRY__" || B === "__EXIT__") continue; // skip entries/exits here
+      const totalFrom = totals.get(A) ?? 0;
+      if (totalFrom < min_support) continue;
+      const p = totalFrom > 0 ? nAB / totalFrom : 0;
+      const arr = byA.get(A) ?? [];
+      arr.push({ to: B, p, support: nAB });
+      byA.set(A, arr);
+    }
+    for (const [A, arr] of byA.entries()) {
+      if (arr.length < 2) continue;
+      const ps = arr.map(x => x.p);
+      const medA = median(ps);
+      const mA   = mad(ps, medA);
+      const sigmaA = 1.4826 * mA;
+      for (const {to, p, support} of arr) {
+        const delta = medA - p; // drop below median choices
+        const z = sigmaA > 0 ? (p - medA) / sigmaA : 0;
+        if (support >= min_support && delta >= min_effect_size && Math.abs(z) >= k) {
+          findings.push({
+            type: "dropoff",
+            metric: "transition_rate",
+            path_sequence: [A, to],
+            value: p,
+            expected: medA,
+            effect_size: delta,
+            z,
+            support,
+            explanation: `Transition ${A} → ${to} is ${(p*100).toFixed(0)}% vs ${(medA*100).toFixed(0)}% among next-step choices`,
+            recommended_checks: ["verify CTA to next step", "check layout changes", "analyze referrer expectations"]
+          });
+        }
+      }
+    }
+  }
+
+  // Sort by severity
+  findings.sort((a,b)=>{
+    const sa = Math.max(Math.abs(a.z ?? 0), a.effect_size);
+    const sb = Math.max(Math.abs(b.z ?? 0), b.effect_size);
+    if (sb !== sa) return sb - sa;
+    return Math.abs(b.value-b.expected) - Math.abs(a.value-a.expected);
+  });
+
+  const summary = findings.length
+    ? `Detected ${findings.length} drop-off(s). Top: ${findings[0].metric} at ${findings[0].path_sequence.join(" → ")}`
+    : "No significant path drop-offs detected for the selected period.";
+
+  return { findings, summary, extras: { exit_rates: exitRates, transitions: rows } };
+}
+
+5) Example usage (small code):
+
+import { detectPathDropoffs } from "./tools/checks/dropoffs";
+import { PgTransitionsSource } from "./adapters/postgres"; // implement this
+
+const src = new PgTransitionsSource(pgPool, {
+  table: "umami.website_event", // or your events table
+  websiteIdColumn: "website_id",
+  visitIdColumn: "visit_id",
+  createdAtColumn: "created_at",
+  eventTypeColumn: "event_type",
+  pathColumn: "url_path",
+});
+
+const result = await detectPathDropoffs(src, {
+  websiteId: "b1d1c8d0-...-.....",
+  date_from: "2025-08-01",
+  date_to: "2025-08-14",
+  min_support: 150,
+  min_effect_size: 0.18, // 18 percentage points
+  sensitivity: "medium",
+  include_step_dropoffs: true,
+  normalize_paths: true,
+});
+console.log(result.summary);
+result.findings.forEach(f => console.log(f));
+
+6) Postgres query (parameterized) sketch
+
+Inside PgTransitionsSource.fetchTransitions:
+// Pseudocode: build SQL with parameter placeholders
+// Note: normalize in SQL if you can, else do it in JS after fetch.
+
+const sql = `
+WITH pv AS (
+  SELECT
+    ${v.visitId} AS visit_id,
+    (${v.path}) AS path_raw,
+    ROW_NUMBER() OVER (PARTITION BY ${v.visitId} ORDER BY ${v.createdAt}) AS rn
+  FROM ${v.table}
+  WHERE ${v.websiteId} = $1
+    AND ${v.eventType} = 'pageview'
+    AND ${v.createdAt} >= $2::timestamptz
+    AND ${v.createdAt} <  ($3::timestamptz + interval '1 day')
+),
+norm AS (
+  SELECT
+    visit_id,
+    CASE WHEN $4::bool THEN lower(regexp_replace(path_raw, '(\\?.*)|(\\#.*)$', '')) ELSE path_raw END AS path
+  FROM pv
+),
+pairs AS (
+  SELECT
+    a.path AS from_path,
+    b.path AS to_path
+  FROM (
+    SELECT visit_id, path, rn FROM (
+      SELECT n.*, ROW_NUMBER() OVER (PARTITION BY visit_id ORDER BY rn) AS rn FROM norm n
+    ) t
+  ) a
+  LEFT JOIN (
+    SELECT visit_id, path, rn FROM norm
+  ) b
+  ON a.visit_id = b.visit_id AND b.rn = a.rn + 1
+)
+SELECT
+  from_path,
+  to_path,
+  COUNT(*)::bigint AS transitions
+FROM pairs
+GROUP BY from_path, to_path;
+`;
+
+// params: [websiteId, date_from, date_to, normalize_paths]
+
+7) ClickHouse adapter (stub)
+
+Create src/adapters/clickhouse.ts that implements TransitionsSource but throws NotImplementedError with TODO comments mapping to:
+row_number() over (partition by visit_id order by created_at)
+count() group by from_path,to_path
+normalizePath (JS or CH replaceAll/lowerUTF8 functions)
+
+8) Edge cases & data hygiene
+
+Low traffic pages: filtered by min_support.
+Path normalization: lowercase, strip query/hash, collapse double slashes, remove trailing slash except root /.
+Merged variants: treat /pricing and /pricing/ as same when normalization is on.
+Single-page sessions: appear as from=/some, to=NULL → contributes to exit rate.
+Entries: from_path=null (ignored for exit rate findings).
+Time zones: DB query uses provided timezone to bound date window (adapter responsibility).
+URL fragments & query params: removed when normalization enabled to avoid exploding cardinality.
+
+9) Tests
+
+Create tests/checks.dropoffs.test.ts with synthetic data (no DB):
+Build TransitionRow[] for a site where /pricing has 65% exits vs others ~40%; expect a finding for /pricing.
+Add pairs under / where P(/signup|/) drops to 10% while median of choices is 35%; expect step drop-off finding.
+Verify min_support prevents noise.
+Verify normalization merges /Pricing/ and /pricing.
+
+10) Acceptance Criteria
+
+get-detect-path-dropoffs returns:
+
+summary string and at least one finding when synthetic anomalies exist.
+Each finding includes path_sequence, value, expected, effect_size, support, and clear explanation.
+Postgres adapter uses parameterized SQL and compiles.
+ClickHouse adapter file exists with TODO mapping.
+No DB-specific logic in detection function; only in adapter.
+
+
