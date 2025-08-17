@@ -15,6 +15,7 @@ import { getPathTableTool } from './get-path-table';
 import { getCountryTableTool } from './get-country-table';
 import { getDetectTimeseriesAnomaliesTool } from './anomaly-insights';
 import { getDetectPathDropoffsTool } from './anomaly-insights';
+import { getDetectSegmentShiftsTool } from './anomaly-insights';
 
 const log = debug('umami:chat:tools');
 
@@ -131,6 +132,37 @@ export function buildToolsMap(): Record<string, any> {
           log('error get-detect-path-dropoffs', error);
           // eslint-disable-next-line no-console
           console.error('[tools][error] get-detect-path-dropoffs', error);
+          throw error;
+        }
+      },
+    }),
+    'get-detect-segment-shifts': (tool as any)({
+      description: getDetectSegmentShiftsTool.description,
+      inputSchema: getDetectSegmentShiftsTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => {
+        log('invoke get-detect-segment-shifts', params);
+        // eslint-disable-next-line no-console
+        console.log('[tools][invoke] get-detect-segment-shifts', params);
+        try {
+          const result = await getDetectSegmentShiftsTool.execute(params);
+          log('result get-detect-segment-shifts', {
+            hasSummaryKeys: result ? Object.keys(result).length : 0,
+            findings: Array.isArray((result as any)?.findings)
+              ? (result as any).findings.length
+              : null,
+          });
+          // eslint-disable-next-line no-console
+          console.log('[tools][result] get-detect-segment-shifts', {
+            hasSummaryKeys: result ? Object.keys(result).length : 0,
+            findings: Array.isArray((result as any)?.findings)
+              ? (result as any).findings.length
+              : null,
+          });
+          return result;
+        } catch (error) {
+          log('error get-detect-segment-shifts', error);
+          // eslint-disable-next-line no-console
+          console.error('[tools][error] get-detect-segment-shifts', error);
           throw error;
         }
       },
