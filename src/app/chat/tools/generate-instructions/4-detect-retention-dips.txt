@@ -1,0 +1,456 @@
+Build a TypeScript tool named get-detect-retention-dips for Umami analytics.
+This tool detects cohort retention anomalies (daily/weekly/monthly). It computes cohort sizes and per-offset (k) retention rates, derives a robust baseline per k from the cross-section of cohorts, and flags cohorts with significant dips vs baseline.
+Purpose: Detect cohort retention anomalies (daily/weekly/monthly).
+
+Goals
+
+Input: websiteId, date range, period (day|week|month), options
+Output: ranked list of retention-dip findings + optional cohort matrix for charts
+DB-agnostic: a CohortSource adapter returns minimal aggregates; all stats are in TS
+Implement Postgres adapter now; provide a ClickHouse adapter stub with TODOs
+Provide unit tests using synthetic data
+
+Inputs:
+{
+  "websiteId": "uuid (optional)",
+  "period": "day|week|month",
+  "cohort_event": "pageview|event_name|*",
+  "date_from": "YYYY-MM-DD",
+  "date_to": "YYYY-MM-DD",
+  "min_cohort_size": 50
+}
+
+Method (formula)
+
+Build first-seen cohorts by period.
+For each cohort C, compute retention_k = active_in_k / cohort_size for k=1..N.
+Flag k where retention_k drops vs. trailing median by ≥ threshold (or z ≥ 2.5).
+
+SQL example take in maind you must write database agnostic queries: 
+WITH first_seen AS (
+  SELECT
+    distinct_id,
+    toStartOfWeek(minIf(created_at, event_type=1)) AS cohort_start
+  FROM umami.website_event
+  WHERE website_id = {websiteId:UUID}
+    AND created_at >= parseDateTimeBestEffort('{date_from}') - INTERVAL 90 DAY
+    AND created_at <  parseDateTimeBestEffort('{date_to}') + INTERVAL 1 DAY
+  GROUP BY distinct_id
+),
+activity AS (
+  SELECT
+    distinct_id,
+    toStartOfWeek(created_at) AS active_week
+  FROM umami.website_event
+  WHERE website_id = {websiteId:UUID}
+)
+SELECT
+  cohort_start,
+  dateDiff('week', cohort_start, active_week) AS k,
+  uniqExact(distinct_id) AS active_users
+FROM first_seen
+JOIN activity USING (distinct_id)
+GROUP BY cohort_start, k
+HAVING k BETWEEN 0 AND 12
+ORDER BY cohort_start, k;
+
+Output:
+{
+  "cohorts": [{ "cohort":"2025-07-07", "k":1, "retention":0.18, "expected":0.26, "z":-2.7 }]
+}
+
+Metric definitions note: retention is derived; bounce/duration definitions for context
+
+1) API & JSON Schema
+export type CohortPeriod = "day" | "week" | "month";
+
+export interface RetentionDipInput {
+  websiteId: string;               // required
+  date_from: string;               // "YYYY-MM-DD" (first-seen cohorts lower bound)
+  date_to: string;                 // "YYYY-MM-DD" (first-seen cohorts upper bound)
+  period?: CohortPeriod;           // default "week"
+  max_k?: number;                  // default 12 (how many offsets to analyze)
+  timezone?: string;               // default "UTC"
+  min_cohort_size?: number;        // default 50 (cohort must be >= this size to consider)
+  min_effect_size?: number;        // default 0.15 (15 percentage points below baseline)
+  sensitivity?: "low"|"medium"|"high"; // affects robust-z threshold (low=3, med=2.5, high=2)
+  return_matrix?: boolean;         // default true (for charting)
+}
+
+export interface RetentionDipFinding {
+  type: "retention_dip";
+  cohort_start: string;            // ISO date (start of cohort period)
+  k: number;                       // periods since cohort_start (1..max_k)
+  metric: "retention";
+  value: number;                   // this cohort's retention_k (0..1)
+  expected: number;                // baseline for this k
+  effect_size: number;             // expected - value  (in 0..1 units)
+  z?: number;                      // robust z vs cross-sectional distribution at k
+  support: number;                 // cohort_size
+  explanation: string;             // human-friendly
+  recommended_checks: string[];    // actions to investigate
+}
+
+export interface RetentionDipOutput {
+  findings: RetentionDipFinding[];
+  summary: string;
+  extras?: {
+    matrix?: Array<{ cohort_start: string; k: number; rate: number; cohort_size: number }>;
+    baselines?: Array<{ k: number; baseline: number }>;
+  };
+}
+
+tool schema:
+{
+  "name": "detect-retention-dips",
+  "description": "Detects cohort retention dips (daily/weekly/monthly) by comparing each cohort's rate at offset k to a robust cross-cohort baseline for the same k.",
+  "input_schema": {
+    "type": "object",
+    "required": ["websiteId","date_from","date_to"],
+    "properties": {
+      "websiteId": { "type": "string" },
+      "date_from": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+      "date_to":   { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+      "period":    { "type": "string", "enum": ["day","week","month"], "default": "week" },
+      "max_k":     { "type": "number", "default": 12 },
+      "timezone":  { "type": "string", "default": "UTC" },
+      "min_cohort_size": { "type": "number", "default": 50 },
+      "min_effect_size": { "type": "number", "default": 0.15 },
+      "sensitivity":     { "type": "string", "enum": ["low","medium","high"], "default": "medium" },
+      "return_matrix":   { "type": "boolean", "default": true }
+    }
+  }
+}
+
+2) Adapter contract (DB-agnostic):
+export interface CohortRow {
+  cohort_start: string; // ISO start of cohort period (day/week/month bucket)
+  k: number;            // offset since cohort_start (0 for first period)
+  active_users: number; // # users active in this period for this cohort
+}
+
+export interface CohortSource {
+  /**
+   * Returns rows of (cohort_start, k, active_users) for first-seen cohorts within [date_from..date_to].
+   * Requirements:
+   * - k=0 MUST represent the cohort size (users active in the first period after first seen).
+   * - For k>0, active_users is the number of cohort users active in that offset period.
+   * - Do NOT compute rates; just counts.
+   */
+  fetchCohorts(params: {
+    websiteId: string;
+    period: "day"|"week"|"month";
+    date_from: string;
+    date_to: string;
+    timezone?: string;
+    max_k?: number; // adapter may cap results; detector will clip anyway
+  }): Promise<CohortRow[]>;
+}
+
+
+3) Formula & detection logic
+
+Definitions
+
+Choose a period P ∈ {day, week, month}.
+
+For each user u, compute first_seen_P(u) (bucketed at P).
+
+A cohort C is the set {u | first_seen_P(u) = t0} for some period start t0 (called cohort_start).
+
+For each k = 0..K:
+Let active(C, k) = number of users in cohort C who are active in bucket t0 + k*P.
+Cohort size = active(C, 0) (users active in first bucket after first-seen).
+
+Retention rate at offset k (k ≥ 1): ret(C, k) = active(C, k) / active(C, 0).
+
+Baseline per k (cross-sectional):
+For each k ≥ 1, gather retention rates for all cohorts with sufficient size:
+R_k = { ret(C, k) | size(C) ≥ min_cohort_size }
+
+Compute robust baseline:
+baseline_k = median(R_k)
+sigma_k = 1.4826 * MAD(R_k) (MAD around the median), robust sd approx
+z(C,k) = (ret(C,k) − baseline_k) / sigma_k (when sigma_k>0)
+
+Flag a dip when both:
+size(C) ≥ min_cohort_size, and
+baseline_k − ret(C, k) ≥ min_effect_size, and
+|z(C,k)| ≥ k_threshold where k_threshold = 3 (low), 2.5 (medium), 2 (high).
+This catches practically large and statistically unusual dips.
+
+
+4) Implementation (TypeScript):
+
+import {
+  RetentionDipInput, RetentionDipOutput, RetentionDipFinding
+} from "../../types.retention";
+import { CohortSource, CohortRow } from "../../adapters/base";
+
+const median = (xs: number[]) => {
+  if (!xs.length) return 0;
+  const a = [...xs].sort((x,y)=>x-y);
+  const m = Math.floor(a.length/2);
+  return a.length % 2 ? a[m] : (a[m-1]+a[m]) / 2;
+};
+const mad = (xs: number[], m?: number) => {
+  const mu = m ?? median(xs);
+  const devs = xs.map(v => Math.abs(v - mu));
+  return median(devs);
+};
+const kFrom = (s: "low"|"medium"|"high" = "medium") => s==="low"?3 : s==="high"?2 : 2.5;
+
+export async function detectRetentionDips(
+  src: CohortSource,
+  input: RetentionDipInput
+): Promise<RetentionDipOutput> {
+  const period = input.period ?? "week";
+  const max_k = input.max_k ?? 12;
+  const tz = input.timezone ?? "UTC";
+  const minSize = input.min_cohort_size ?? 50;
+  const minEff = input.min_effect_size ?? 0.15;
+  const zThresh = kFrom(input.sensitivity ?? "medium");
+
+  const rows: CohortRow[] = await src.fetchCohorts({
+    websiteId: input.websiteId,
+    period,
+    date_from: input.date_from,
+    date_to: input.date_to,
+    timezone: tz,
+    max_k
+  });
+
+  // Build cohort -> size & per-k actives
+  const byCohort = new Map<string, { size: number; kAct: Map<number, number> }>();
+  for (const r of rows) {
+    const ent = byCohort.get(r.cohort_start) ?? { size: 0, kAct: new Map() };
+    if (r.k === 0) ent.size = r.active_users;
+    else if (r.k > 0 && r.k <= max_k) ent.kAct.set(r.k, r.active_users);
+    byCohort.set(r.cohort_start, ent);
+  }
+
+  // Compute per-k arrays of retention rates across cohorts
+  const ratesByK = new Map<number, Array<{ cohort: string; rate: number; size: number }>>();
+  for (const [cohort, data] of byCohort.entries()) {
+    if (data.size < minSize || data.size <= 0) continue;
+    for (const [k, active] of data.kAct.entries()) {
+      if (k < 1 || k > max_k) continue;
+      const rate = active / data.size;
+      const arr = ratesByK.get(k) ?? [];
+      arr.push({ cohort, rate, size: data.size });
+      ratesByK.set(k, arr);
+    }
+  }
+
+  // Compute baselines per k
+  const baselineByK = new Map<number, { baseline: number; sigma: number }>();
+  for (const [k, arr] of ratesByK.entries()) {
+    const xs = arr.map(x => x.rate);
+    const base = median(xs);
+    const sig = 1.4826 * mad(xs, base);
+    baselineByK.set(k, { baseline: base, sigma: sig });
+  }
+
+  // Create findings
+  const findings: RetentionDipFinding[] = [];
+  for (const [k, arr] of ratesByK.entries()) {
+    const { baseline, sigma } = baselineByK.get(k)!;
+    for (const { cohort, rate, size } of arr) {
+      const eff = Math.max(0, baseline - rate);
+      const z = sigma > 0 ? (rate - baseline) / sigma : 0;
+      if (size >= minSize && eff >= minEff && Math.abs(z) >= zThresh) {
+        findings.push({
+          type: "retention_dip",
+          cohort_start: cohort,
+          k,
+          metric: "retention",
+          value: rate,
+          expected: baseline,
+          effect_size: eff,
+          z,
+          support: size,
+          explanation: `Cohort ${cohort} has k=${k} retention ${(rate*100).toFixed(0)}% vs baseline ${(baseline*100).toFixed(0)}%`,
+          recommended_checks: [
+            "review onboarding between k-1 and k",
+            "check feature launches or pricing changes in that window",
+            "analyze email/push re-engagement for this cohort"
+          ]
+        });
+      }
+    }
+  }
+
+  // Rank by severity
+  findings.sort((a,b)=>{
+    const sa = Math.max(Math.abs(a.z ?? 0), a.effect_size);
+    const sb = Math.max(Math.abs(b.z ?? 0), b.effect_size);
+    if (sb !== sa) return sb - sa;
+    // tie-break by absolute gap
+    return (b.expected - b.value) - (a.expected - a.value);
+  });
+
+  const summary = findings.length
+    ? `Detected ${findings.length} retention dip(s). Top: cohort ${findings[0].cohort_start} at k=${findings[0].k} (${(findings[0].value*100).toFixed(0)}% vs ${(findings[0].expected*100).toFixed(0)}%).`
+    : "No significant retention dips detected for the selected period.";
+
+  const extras = input.return_matrix !== false
+    ? {
+        matrix: Array.from(byCohort.entries()).flatMap(([cohort, data]) => {
+          const rows: Array<{ cohort_start: string; k: number; rate: number; cohort_size: number }> = [];
+          for (let k = 1; k <= max_k; k++) {
+            const active = data.kAct.get(k) ?? 0;
+            const rate = data.size > 0 ? active / data.size : 0;
+            rows.push({ cohort_start: cohort, k, rate, cohort_size: data.size });
+          }
+          return rows;
+        }),
+        baselines: Array.from(baselineByK.entries()).map(([k, v]) => ({ k, baseline: v.baseline }))
+      }
+    : undefined;
+
+  return { findings, summary, extras };
+}
+
+
+5) Postgres SQL sketches (parameterized)
+
+Create src/adapters/postgres.ts implementing CohortSource.fetchCohorts with pg.
+Assume an events table with columns:
+
+website_id uuid, distinct_id text/uuid (user id), event_type text, created_at timestamptz
+
+You count a user “active” in a bucket if they have any event or pageview in that bucket.
+
+Step A: compute first_seen bucket per user (bounded by date range)
+
+-- $1=websiteId, $2=date_from, $3=date_to, $4=period('day'|'week'|'month')
+WITH first_seen AS (
+  SELECT
+    distinct_id,
+    CASE
+      WHEN $4 = 'day'   THEN date_trunc('day',   MIN(created_at))
+      WHEN $4 = 'week'  THEN date_trunc('week',  MIN(created_at))
+      WHEN $4 = 'month' THEN date_trunc('month', MIN(created_at))
+    END AS cohort_start
+  FROM events
+  WHERE website_id = $1
+    AND created_at >= $2::timestamptz
+    AND created_at <  ($3::timestamptz + interval '1 day')
+  GROUP BY distinct_id
+),
+activity AS (
+  SELECT
+    distinct_id,
+    CASE
+      WHEN $4 = 'day'   THEN date_trunc('day',   created_at)
+      WHEN $4 = 'week'  THEN date_trunc('week',  created_at)
+      WHEN $4 = 'month' THEN date_trunc('month', created_at)
+    END AS active_bucket
+  FROM events
+  WHERE website_id = $1
+    AND created_at >= $2::timestamptz
+    AND created_at <  ($3::timestamptz + interval '1 day')
+),
+joined AS (
+  SELECT
+    f.cohort_start,
+    a.active_bucket,
+    EXTRACT(EPOCH FROM (a.active_bucket - f.cohort_start)) AS delta_sec
+  FROM first_seen f
+  JOIN activity a USING (distinct_id)
+  WHERE a.active_bucket >= f.cohort_start
+)
+SELECT
+  to_char(cohort_start, 'YYYY-MM-DD') AS cohort_start,
+  CASE
+    WHEN $4='day'   THEN FLOOR(delta_sec / 86400)
+    WHEN $4='week'  THEN FLOOR(delta_sec / (86400*7))
+    WHEN $4='month' THEN FLOOR(EXTRACT(YEAR FROM age(active_bucket, cohort_start))*12
+                                + EXTRACT(MONTH FROM age(active_bucket, cohort_start)))
+  END::int AS k,
+  COUNT(DISTINCT (cohort_start::date, active_bucket::date, /*distinct user id implied*/)) AS active_users
+FROM joined
+GROUP BY cohort_start, k
+ORDER BY cohort_start, k;
+
+Note: The COUNT(DISTINCT ...) for active users should actually count distinct users per (cohort_start, k). If you cannot reference the distinct_id at this layer, compute in a CTE including it:
+COUNT(DISTINCT distinct_id) AS active_users.
+
+Implementation notes
+
+For k=0 we need cohort size: users active in the first bucket (same as cohort_start). The query above includes k=0 when active_bucket = cohort_start.
+
+Ensure performance with indexes on (website_id, created_at) and (website_id, distinct_id, created_at).
+
+ClickHouse hints (adapter stub later)
+
+Use toStartOfDay/Week/Month(created_at) to bucket.
+
+Compute first_value (or min) of bucket per user for first_seen.
+
+Compute k via dateDiff('day'|'week'|'month', cohort_start, active_bucket).
+
+6) Example usage:
+import { detectRetentionDips } from "./tools/checks/retention";
+import { PgCohortSource } from "./adapters/postgres";
+
+const src = new PgCohortSource(pgPool, { table: "umami.website_event" });
+
+const out = await detectRetentionDips(src, {
+  websiteId: "b1d1c8d0-...-.....",
+  date_from: "2025-05-01",
+  date_to: "2025-08-01",
+  period: "week",
+  max_k: 8,
+  min_cohort_size: 80,
+  min_effect_size: 0.18,   // 18pp below baseline
+  sensitivity: "medium",
+  return_matrix: true
+});
+
+console.log(out.summary);
+console.table(out.findings.map(f => ({
+  cohort: f.cohort_start, k: f.k,
+  rate: (f.value*100).toFixed(1)+"%",
+  baseline: (f.expected*100).toFixed(1)+"%",
+  drop_pp: (f.effect_size*100).toFixed(1)
+})));
+
+7) Tests (synthetic, no DB)
+
+Create tests/checks.retention.test.ts:
+
+Build synthetic CohortRow[] with 5–8 cohorts, sizes 120–300.
+
+Make normal retention around: k1≈30%, k2≈22%, k3≈16%… and one bad cohort with k1=12% (big dip).
+Expect a finding for that cohort at k=1.
+
+Verify min_cohort_size filter hides tiny cohorts.
+
+Verify min_effect_size prevents small dips.
+
+Verify sensitivity (robust z) gates marginal dips.
+
+Verify return_matrix adds extras.matrix and extras.baselines.
+
+Mock the adapter to return given rows.
+
+8) Acceptance Criteria
+
+detect-retention-dips returns:
+
+A concise summary and one or more findings when synthetic dips are present.
+
+Each finding includes cohort_start, k, value, expected, effect_size, support, and a clear explanation.
+
+Postgres adapter compiles with parameterized queries; no SQL injection.
+
+ClickHouse adapter stub exists with TODO notes mapping bucket functions and dateDiff.
+
+No DB-specific logic inside the detector; only in the adapter.
+
+Code passes unit tests.
+
+
+
+
