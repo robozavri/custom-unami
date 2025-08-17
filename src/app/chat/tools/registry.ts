@@ -17,6 +17,7 @@ import { getDetectTimeseriesAnomaliesTool } from './anomaly-insights';
 import { getDetectPathDropoffsTool } from './anomaly-insights';
 import { getDetectSegmentShiftsTool } from './anomaly-insights';
 import { getDetectRetentionDipsTool } from './anomaly-insights';
+import { getChurnRateTool } from './get-churn-rate';
 
 const log = debug('umami:chat:tools');
 
@@ -195,6 +196,31 @@ export function buildToolsMap(): Record<string, any> {
           log('error get-detect-retention-dips', error);
           // eslint-disable-next-line no-console
           console.error('[tools][error] get-detect-retention-dips', error);
+          throw error;
+        }
+      },
+    }),
+    'get-churn-rate': (tool as any)({
+      description: getChurnRateTool.description,
+      inputSchema: getChurnRateTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => {
+        log('invoke get-churn-rate', params);
+        // eslint-disable-next-line no-console
+        console.log('[tools][invoke] get-churn-rate', params);
+        try {
+          const result = await getChurnRateTool.execute(params);
+          log('result get-churn-rate', {
+            rows: Array.isArray((result as any)?.data) ? (result as any).data.length : null,
+          });
+          // eslint-disable-next-line no-console
+          console.log('[tools][result] get-churn-rate', {
+            rows: Array.isArray((result as any)?.data) ? (result as any).data.length : null,
+          });
+          return result;
+        } catch (error) {
+          log('error get-churn-rate', error);
+          // eslint-disable-next-line no-console
+          console.error('[tools][error] get-churn-rate', error);
           throw error;
         }
       },

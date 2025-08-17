@@ -1,0 +1,317 @@
+1) Churn Rate — Formula & Definitions (English)
+
+Core definition (logo churn):
+
+The percentage of users who leave during a period, out of the users who were at risk at the start of that period.
+
+Formula (period churn):
+
+\text{Churn Rate} = \frac{\text{# Users who churned in period}}{\text{# Users at risk at period start}} \times 100
+
+Users at risk (denominator): all active users at period start (e.g., had an account and had not already churned).
+
+Users who churned (numerator): users from that risk set who became inactive or canceled during the period.
+
+Two common churn detection models:
+
+Cancellation-based churn (subscriptions):
+A user churns when they cancel (or their subscription expires) within the period.
+
+Inactivity-based churn (products without subscriptions):
+A user churns if they show no activity for X days after their last event (inactivity threshold).
+
+If last_seen_at + inactivity_days falls inside the period, count as churn in that period.
+
+Inactivity_days is a configurable threshold (e.g., 14/28/30).
+
+Relationship with retention (same cohort/period definition):
+
+Churn Rate
+=
+1
+−
+Retention Rate
+Churn Rate=1−Retention Rate
+
+…but only if both are computed on the same cohort and same window logic.
+
+Variants you may support later:
+
+Revenue churn: use MRR/ARR instead of user count.
+
+Net churn: (Churned revenue – expansion revenue) / starting MRR.
+
+Cohort churn: compute churn for users acquired in a specific cohort over N periods.
+
+Rolling churn: sliding windows (e.g., 28-day rolling).
+
+Inputs/assumptions your tool should accept:
+
+period: { granularity: "day"|"week"|"month", start: ISO8601, end: ISO8601 }
+
+churn_model: "cancellation" | "inactivity"
+
+inactivity_days (required for inactivity model)
+
+Data contract (logical, DB-agnostic):
+
+users table with: user_id, created_at, optional canceled_at (for cancellation model)
+
+events table with: user_id, timestamp (activity pings)
+
+Optional filters: product_id, country, plan, etc.
+
+De-duplication: count each user_id once.
+
+Timezone handling (default UTC; configurable).
+
+Outputs (per period bucket):
+
+{
+  "period_start": "2025-08-01",
+  "period_end": "2025-08-31",
+  "at_risk": 1200,
+  "churned": 210,
+  "churn_rate": 17.5
+}
+
+
+Edge cases to handle:
+
+Users created during the period are not “at risk” for that period’s start (unless business wants “mid-period exposure”—keep default = exclude).
+
+Users who cancel and then re-subscribe in the same period: count as churn unless configured otherwise; expose a flag treat_resubscribe_as_retained.
+
+Soft-deleted/blocked users: exclude by default (configurable).
+
+Late events (arriving out of order): document that results reflect data at query time.
+
+here code that you can use or use just to understand the tool main idea.
+take in main you must write database agnostic query. 
+code: 
+
+2) Cursor Prompt — Generate MCP Tool for Churn Rate (DB-agnostic)
+
+Copy–paste the entire block below into Cursor.
+
+You are an expert TypeScript engineer. Build an MCP tool named "churn-rate" that computes user churn in a DB-agnostic way (Postgres today, ClickHouse later). Follow this spec exactly.
+
+## Goals
+- Produce a reusable MCP server tool "compute_churn_rate" that calculates churn by period buckets with two churn models:
+  1) "cancellation" (subscription products)
+  2) "inactivity" (non-subscription products)
+- Database agnostic: implement a small QueryRunner interface so we can swap drivers (pg/clickhouse) without changing logic.
+- Deterministic, testable, production-ready: strict typing, input validation, unit tests.
+
+## Inputs
+Create a JSON schema for the tool input:
+- period: {
+    granularity: "day" | "week" | "month",
+    start: string (ISO8601),
+    end: string (ISO8601)
+  }
+- churn_model: "cancellation" | "inactivity"
+- inactivity_days?: number  // required if churn_model = "inactivity"
+- filters?: {
+    product_id?: string
+    country?: string
+    plan?: string
+  }
+- options?: {
+    timezone?: string   // default "UTC"
+    include_resubscribed?: boolean // default false
+  }
+
+## Output
+Return an array of objects (one per bucket):
+{
+  period_start: string,   // ISO date of bucket start in timezone
+  period_end: string,     // ISO date of bucket end in timezone
+  at_risk: number,
+  churned: number,
+  churn_rate: number      // 0..100
+}
+
+## Data Contract (Logical)
+We will map to actual tables via configuration. Assume:
+- users(user_id TEXT, created_at TIMESTAMP, canceled_at TIMESTAMP NULL)
+- events(user_id TEXT, timestamp TIMESTAMP)
+- Optional dimension columns (e.g., country, plan) may live in users or events; for simplicity assume they live in users.
+
+## Implementation Plan
+1) Create a small "QueryRunner" interface:
+
+
+export interface QueryRunner {
+query<T = any>(sql: string, params?: any[]): Promise<T[]>;
+dialect: "postgres" | "clickhouse";
+}
+
+Provide two adapters:
+- PostgresQueryRunner (uses 'pg')
+- ClickHouseQueryRunner (uses '@clickhouse/client' if needed later; stub now with TODO)
+Keep all SQL in helper functions that branch by dialect where necessary.
+
+2) Bucketizer:
+- Given (start, end, granularity, timezone), generate closed-open buckets [start_i, end_i).
+- Use a pure TS function; no DB dependency.
+
+3) At-risk set per bucket:
+- At-risk users for bucket i are those with `created_at < bucket_start` AND (for cancellation model) NOT canceled before bucket_start.
+- Apply optional filters on users.
+
+4) Churned users per bucket:
+- Cancellation model: users with `canceled_at` in [bucket_start, bucket_end).
+- Inactivity model:
+  a) Compute each user’s last_seen_at = MAX(events.timestamp) up to bucket_end.
+  b) A user is churned in bucket i if:
+     - last_seen_at < bucket_start AND
+     - last_seen_at + inactivity_days falls within [bucket_start, bucket_end)
+     - AND user was at-risk at bucket_start.
+  Implement efficiently with SQL windowing/aggregation. For Postgres use DISTINCT ON / GROUP BY; for ClickHouse use GROUP BY + max(timestamp).
+
+5) Denominator rules:
+- Users created during the bucket are not at-risk for that bucket by default.
+
+6) Edge cases:
+- If `include_resubscribed = false`, users who cancel and re-activate within the same bucket remain churned.
+- Exclude rows with null/invalid user_id.
+- Late events are not backfilled.
+
+7) Validation:
+- If churn_model = "inactivity" and inactivity_days is missing, throw a 400-like error.
+- Validate date interval and granularity.
+
+8) Performance:
+- Paginate internal subqueries if needed.
+- For Postgres, ensure use of indices on (user_id), (created_at), (canceled_at) and events(user_id, timestamp).
+
+## SQL-Agnostic Pseudo-SQL
+
+-- Users at risk at bucket_start (cancellation model)
+SELECT u.user_id
+FROM users u
+WHERE u.created_at < :bucket_start
+AND (u.canceled_at IS NULL OR u.canceled_at >= :bucket_start)
+/* + optional filters on users */
+
+-- Churned in bucket (cancellation)
+SELECT u.user_id
+FROM users u
+WHERE u.canceled_at >= :bucket_start
+AND u.canceled_at <  :bucket_end
+/* + must be in at-risk set */
+
+-- Last seen (for inactivity model) up to bucket_end:
+SELECT e.user_id, MAX(e.timestamp) AS last_seen_at
+FROM events e
+JOIN users u ON u.user_id = e.user_id
+WHERE e.timestamp < :bucket_end
+/* + optional filters via users */
+GROUP BY e.user_id
+
+-- Churned by inactivity in bucket i:
+-- last_seen_at exists and last_seen_at < bucket_start
+-- and last_seen_at + inactivity_days ∈ [bucket_start, bucket_end)
+-- and user ∈ at-risk(bucket_start)
+
+## TypeScript Structure (files)
+- src/
+- index.ts                // MCP server bootstrap
+- schema.ts               // zod schemas for input/output
+- queryRunner.ts          // interface + PG adapter (+ CH stub)
+- bucket.ts               // bucketizer util
+- churn.ts                // core logic; exports computeChurnRate(...)
+- sql/
+ - usersAtRisk.ts        // functions that emit dialect-aware SQL strings
+ - churnCancellation.ts
+ - lastSeen.ts
+ - churnInactivity.ts
+- mcp/
+ - tools.ts              // registers "compute_churn_rate"
+- test/
+- churn.spec.ts           // unit tests with in-memory fixtures
+
+## Coding Requirements
+- Use TypeScript, strict mode, ES2020 modules.
+- Use zod for input validation.
+- No ORM; write SQL strings. Keep logic DB-agnostic by emitting dialect-specific SQL in helpers where necessary (date arithmetic differs: Postgres INTERVAL vs ClickHouse addDays()).
+- Keep functions pure where possible; easy to unit-test with arrays (for logic) and mock QueryRunner for integration paths.
+
+## Minimal Code Sketches (show real code)
+
+1) queryRunner.ts
+```ts
+export interface QueryRunner {
+query<T = any>(sql: string, params?: any[]): Promise<T[]>;
+dialect: "postgres" | "clickhouse";
+}
+
+
+bucket.ts
+
+export type Granularity = "day" | "week" | "month";
+export function makeBuckets(startISO: string, endISO: string, granularity: Granularity, tz = "UTC"): Array<{start: Date; end: Date}> {
+  // implement using Luxon or native; ensure closed-open [start, end)
+  // ...
+}
+
+
+schema.ts
+
+import { z } from "zod";
+export const InputSchema = z.object({
+  period: z.object({
+    granularity: z.enum(["day","week","month"]),
+    start: z.string(),
+    end: z.string()
+  }),
+  churn_model: z.enum(["cancellation","inactivity"]),
+  inactivity_days: z.number().int().positive().optional(),
+  filters: z.object({
+    product_id: z.string().optional(),
+    country: z.string().optional(),
+    plan: z.string().optional(),
+  }).optional(),
+  options: z.object({
+    timezone: z.string().optional(),
+    include_resubscribed: z.boolean().optional(),
+  }).optional(),
+});
+export type Input = z.infer<typeof InputSchema>;
+export type OutputRow = {
+  period_start: string; period_end: string;
+  at_risk: number; churned: number; churn_rate: number;
+};
+
+
+churn.ts (core)
+
+import { Input, OutputRow } from "./schema";
+import { QueryRunner } from "./queryRunner";
+import { makeBuckets } from "./bucket";
+import { sqlUsersAtRisk, sqlChurnCancellation, sqlLastSeen, sqlChurnInactivity } from "./sql/*";
+
+export async function computeChurnRate(qr: QueryRunner, input: Input): Promise<OutputRow[]> {
+  // validate input (ensure inactivity_days when needed)
+  // build buckets
+  // for each bucket:
+  //   fetch at-risk ids
+  //   fetch churned ids per model
+  //   compute churn_rate = (churned/at_risk)*100 with safe divide
+  // return all rows
+}
+
+
+sql helpers (dialect branching)
+
+export function sqlUsersAtRisk(dialect: "postgres"|"clickhouse", args){ /* return {text, params} */ }
+export function sqlChurnCancellation(dialect, args){ /* ... */ }
+export function sqlLastSeen(dialect, args){ /* ... */ }      // MAX(timestamp) up to bucket_end
+export function sqlChurnInactivity(dialect, args){ /* ... */ } // date add differs per dialect
+
+
+tests (logic)
+
+// create synthetic users/events arrays to test inactivity model edge cases
+// also test cancellation model with re-subscribes and include_resubscribed=false

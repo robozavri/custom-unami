@@ -43,6 +43,7 @@ export * from '@/queries/sql/sessions/saveSessionData';
 export * from '@/queries/sql/anomaly-insights/getPathDropoffTransitions';
 export * from '@/queries/sql/anomaly-insights/getSegmentTotals';
 export * from '@/queries/sql/anomaly-insights/getRetentionCohorts';
+export * from '@/queries/sql/reports/getUserEventsForChurn';
 export * from '@/queries/sql/getActiveVisitors';
 export * from '@/queries/sql/getChannelMetrics';
 export * from '@/queries/sql/getRealtimeActivity';

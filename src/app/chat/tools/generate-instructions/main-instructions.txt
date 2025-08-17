@@ -1,0 +1,15 @@
+1. Retention rate – რამდენი მომხმარებელი ბრუნდება
+2. Churn rate – რამდენი მომხმარებელი წყვეტს გამოყენებას
+3. Active users (DAU/WAU/MAU) – დღიური, კვირის, თვის აქტიური მომხმარებლები
+4. Session length – სესიის ხანგრძლივობა
+5. Bounce rate – რამდენი წავიდა ერთი გვერდიდან
+6. Conversion rate – რამდენმა შეასრულა სასურველი ქმედება (მაგ. იყიდა)
+7. Funnel completion rate – რამდენი სრულად გადის funnel-ს (მაგ. checkout flow)
+8. Click-through rate (CTR) – CTR ღილაკებზე/ბანერებზე
+9. Average revenue per user (ARPU)
+10. Customer Lifetime Value (LTV)
+11. Acquisition cost (CAC) – ერთი მომხმარებლის მოზიდვის ფასი
+12. Engagement rate – ჩართულობის დონე
+13. Cohort retention – კოჰორტების შედარება დროში
+14. Feature adoption rate – ახალი ფუნქციის გამოყენება
+15. Error/crash rate – ტექნიკური პრობლემების მაჩვენებელი
