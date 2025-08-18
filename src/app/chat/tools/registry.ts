@@ -18,6 +18,7 @@ import { getDetectPathDropoffsTool } from './anomaly-insights';
 import { getDetectSegmentShiftsTool } from './anomaly-insights';
 import { getDetectRetentionDipsTool } from './anomaly-insights';
 import { getChurnRateTool } from './get-churn-rate';
+import { getBounceRateTool } from './get-bounce-rate';
 
 const log = debug('umami:chat:tools');
 
@@ -224,6 +225,11 @@ export function buildToolsMap(): Record<string, any> {
           throw error;
         }
       },
+    }),
+    'get-bounce-rate': (tool as any)({
+      description: getBounceRateTool.description,
+      inputSchema: getBounceRateTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getBounceRateTool.execute(params),
     }),
   };
 }

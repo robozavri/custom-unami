@@ -1,0 +1,359 @@
+1) Bounce Rate — Formula & Definitions (English)
+
+Core idea: A bounce is a session with no meaningful subsequent interaction beyond the landing view.
+
+Classic (session-based) definition
+
+Bounce Rate (site) =
+(# of bounced sessions) ÷ (# of sessions) × 100
+
+A bounced session is one that:
+
+has exactly one page/screen view and no other qualifying interactions, or
+
+ends before an engagement threshold (e.g., <10 seconds) and no conversion.
+
+Page-level (landing page) definition
+
+Bounce Rate (for page P) =
+(# of sessions that started on P and bounced) ÷ (# of sessions that started on P) × 100
+
+Event-based definition (when you don’t have a sessions table)
+
+Treat all events with the same session_id as a session.
+
+A bounce occurs if the session has only one qualifying interaction (typically the landing page_view) and no further interaction events within the session window (and optionally < engagement threshold).
+
+Engagement relationship
+
+If you compute Engagement Rate as “engaged sessions / sessions”, then:
+
+Bounce Rate ≈ 100 − Engagement Rate (only if “engaged” is defined as the inverse of your bounce criteria).
+
+What counts as a “qualifying interaction”?
+
+Configurable, but typical choices include:
+
+page_view (landing event), route_change, click, scroll_depth >= X%, video_play, form_submit, add_to_cart, purchase, etc.
+
+Exclude heartbeats/idle pings/SDK keep-alives from interactions.
+
+Inputs your tool should accept
+
+period: { granularity: "day"|"week"|"month", start, end }
+
+mode: "session" | "event" (how to compute bounces)
+
+engagement: { min_seconds?: number, conversion_events?: string[] }
+
+interaction_events: string[] (what counts beyond the initial view)
+
+exclude_events: string[] (e.g., heartbeats)
+
+breakdown?: { by?: "landing_page"|"device"|"country"|"utm_source"|null }
+
+filters?: { country?, device?, utm_source?, product_id?, path_prefix? }
+
+options?: { timezone?: string, treat_route_change_as_view?: boolean, session_timeout_minutes?: number }
+
+Data contract (logical, DB-agnostic)
+
+events(user_id, session_id, timestamp, event_name, page_url, page_referrer, device, country, …)
+
+Optionally sessions(session_id, user_id, started_at, landing_page, engagement_time_s, pageviews, converted_flag, device, country, …)
+(If sessions doesn’t exist, compute from events by grouping on session_id.)
+
+Output (per time bucket and optional breakdown)
+{
+  "period_start": "2025-08-01",
+  "period_end": "2025-08-31",
+  "dimension": { "landing_page": "/pricing" }, // present only if breakdown requested
+  "sessions": 3421,
+  "bounces": 1587,
+  "bounce_rate": 46.4
+}
+
+SPA nuances & edge cases
+
+SPA route changes: if treat_route_change_as_view = true, count them as additional views (reduces bounces).
+
+Engagement threshold: if min_seconds (e.g., 10s) is met or any conversion_events occur, the session is not a bounce even if single-view.
+
+Bots/Prefetch: recommend filtering (user-agent lists / exclude_events).
+
+Sessionization: if no session_id, derive via inactivity gap (e.g., 30min).
+
+2) Cursor Prompt — Generate MCP Tool for Bounce Rate (DB-agnostic)
+
+Copy–paste everything between the lines into Cursor.
+
+You are an expert TypeScript engineer. Build an MCP tool named "bounce-rate" that computes Bounce Rate in a DB-agnostic way (Postgres now, ClickHouse later). Follow this spec exactly.
+
+## Goals
+- Expose MCP tool "compute_bounce_rate" that returns bounce stats per time bucket, optionally broken down by a dimension (e.g., landing_page).
+- Support two computation modes:
+  1) "session": use a sessions table if present
+  2) "event": derive sessions by grouping events on session_id
+- Keep logic DB-agnostic via a QueryRunner interface and dialect-aware SQL helpers.
+
+## Inputs (JSON schema)
+- period: {
+    granularity: "day" | "week" | "month",
+    start: string, // ISO
+    end: string    // ISO
+  }
+- mode: "session" | "event"
+- engagement?: {
+    min_seconds?: number,          // default 0; if met, session is NOT a bounce
+    conversion_events?: string[]   // if any present in session, NOT a bounce
+  }
+- interaction_events: string[]     // events that count as interactions beyond the landing view
+- exclude_events?: string[]        // events to ignore (heartbeats, etc.)
+- breakdown?: {
+    by?: "landing_page" | "device" | "country" | "utm_source" | null
+  }
+- filters?: {
+    country?: string,
+    device?: string,
+    utm_source?: string,
+    product_id?: string,
+    path_prefix?: string           // only include sessions whose landing_page starts with this
+  }
+- options?: {
+    timezone?: string,             // default "UTC"
+    treat_route_change_as_view?: boolean, // default true for SPAs
+    session_timeout_minutes?: number       // default 30 (only used if we ever infer sessions)
+  }
+
+## Output
+Return an array of rows (one per time bucket x breakdown key (if any)):
+{
+  period_start: string,  // ISO
+  period_end: string,    // ISO
+  dimension?: Record<string,string>,
+  sessions: number,
+  bounces: number,
+  bounce_rate: number    // 0..100
+}
+
+## Data Contract (Logical)
+- events(user_id TEXT, session_id TEXT, timestamp TIMESTAMP, event_name TEXT,
+         page_url TEXT, page_referrer TEXT, device TEXT, country TEXT, utm_source TEXT, ...)
+- sessions(session_id TEXT, user_id TEXT, started_at TIMESTAMP, landing_page TEXT,
+           engagement_time_s INT, pageviews INT, converted_flag BOOL,
+           device TEXT, country TEXT, utm_source TEXT, ...)
+If sessions is missing, we will compute bounce via the "event" mode purely from events.
+
+## Architecture
+- src/
+  - index.ts                // MCP bootstrap and tool registration
+  - schema.ts               // zod schemas for input/output
+  - bucket.ts               // time bucket generator [start, end)
+  - queryRunner.ts          // QueryRunner interface + Postgres adapter + ClickHouse stub
+  - bounce.ts               // core orchestrator
+  - sql/
+    - sessionBased.ts       // SQL helpers for mode="session"
+    - eventBased.ts         // SQL helpers for mode="event"
+  - util/
+    - filters.ts            // WHERE clause builder for optional filters
+- test/
+  - bounce.spec.ts          // unit tests (both modes, SPA vs non-SPA, engagement thresholds)
+
+## QueryRunner
+```ts
+export interface QueryRunner {
+  dialect: "postgres" | "clickhouse";
+  query<T = any>(sql: string, params?: any[]): Promise<T[]>;
+}
+
+Bucketizer
+export type Granularity = "day"|"week"|"month";
+export function makeBuckets(startISO: string, endISO: string, g: Granularity, tz="UTC"): Array<{start: string; end: string}> { /* closed-open */ }
+
+Session-based computation (mode="session")
+
+Definitions:
+
+A session is a bounce if:
+
+pageviews <= 1 AND
+
+no qualifying interaction events beyond the landing view AND
+
+(engagement.min_seconds ? engagement_time_s < min_seconds : true) AND
+
+(conversion_events ? converted_flag=false : true)
+
+We aggregate per bucket (and optional breakdown):
+
+sessions = COUNT(*)
+
+bounces = COUNT(*) WHERE above bounce predicate
+
+bounce_rate = (bounces / sessions) * 100
+
+Pseudo-SQL (Postgres-like)
+-- Base sessions in bucket with optional filters
+SELECT
+  DATE_TRUNC(:granularity, s.started_at AT TIME ZONE :tz) AS bucket_start,
+  s.session_id,
+  s.landing_page,
+  s.pageviews,
+  s.engagement_time_s,
+  s.converted_flag,
+  s.device,
+  s.country,
+  s.utm_source
+FROM sessions s
+WHERE s.started_at >= :bucket_start
+  AND s.started_at <  :bucket_end
+  /* + filters on country/device/utm_source/landing_page prefix */
+
+
+If interaction_events provided AND we track them only in events, compute a flag per session:
+
+WITH base AS ( ...above... ),
+interactions AS (
+  SELECT e.session_id,
+         BOOL_OR(e.event_name = ANY(:interaction_events)) AS has_interaction
+  FROM events e
+  JOIN base b ON b.session_id = e.session_id
+  WHERE e.timestamp >= :bucket_start AND e.timestamp < :bucket_end
+    AND NOT (e.event_name = ANY(:exclude_events))
+  GROUP BY e.session_id
+)
+SELECT bucket_start, /* dimension cols */,
+       COUNT(*) AS sessions,
+       COUNT(*) FILTER (
+         WHERE (b.pageviews <= 1)
+           AND (COALESCE(i.has_interaction,false) = false)
+           AND (:min_seconds IS NULL OR b.engagement_time_s < :min_seconds)
+           AND (:conv_events_len = 0 OR b.converted_flag = false)
+       ) AS bounces
+FROM base b
+LEFT JOIN interactions i ON i.session_id = b.session_id
+GROUP BY bucket_start, /* dims */;
+
+Event-based computation (mode="event")
+
+Definitions:
+
+Group events by session_id.
+
+Determine landing event = earliest event in session (often page_view).
+
+A session is a bounce if:
+
+no qualifying interaction event after the landing event (exclude heartbeats), AND
+
+(engagement.min_seconds ? (max_timestamp - min_timestamp) < min_seconds : true), AND
+
+(no conversion_events present)
+
+Pseudo-SQL (Postgres-like)
+WITH session_events AS (
+  SELECT
+    e.session_id,
+    MIN(e.timestamp) AS first_ts,
+    MAX(e.timestamp) AS last_ts,
+    MIN(e.page_url)  FILTER (WHERE e.timestamp = MIN(e.timestamp)) AS landing_page, -- or use arg_min in ClickHouse
+    BOOL_OR(e.event_name = ANY(:conversion_events)) AS has_conversion,
+    BOOL_OR( (e.event_name = ANY(:interaction_events)) AND e.timestamp > MIN(e.timestamp) ) AS has_interaction_after_first,
+    ANY_VALUE(e.device)   AS device,     -- use appropriate aggregate per dialect
+    ANY_VALUE(e.country)  AS country,
+    ANY_VALUE(e.utm_source) AS utm_source
+  FROM events e
+  WHERE e.timestamp >= :bucket_start AND e.timestamp < :bucket_end
+    AND NOT (e.event_name = ANY(:exclude_events))
+  GROUP BY e.session_id
+),
+classified AS (
+  SELECT
+    session_id,
+    landing_page,
+    device, country, utm_source,
+    (EXTRACT(EPOCH FROM (last_ts - first_ts)))::int AS duration_s,
+    (NOT has_interaction_after_first)
+      AND (:min_seconds IS NULL OR (EXTRACT(EPOCH FROM (last_ts - first_ts)) < :min_seconds))
+      AND (:conv_events_len = 0 OR has_conversion = false) AS is_bounce
+  FROM session_events
+)
+SELECT
+  DATE_TRUNC(:granularity, first_ts AT TIME ZONE :tz) AS bucket_start,
+  /* group by dimension if requested */,
+  COUNT(*) AS sessions,
+  COUNT(*) FILTER (WHERE is_bounce) AS bounces
+FROM session_events se
+JOIN classified c USING(session_id)
+GROUP BY bucket_start, /* dims */;
+
+ClickHouse notes
+
+Replace DATE_TRUNC with toStartOfDay/Week/Month or date_trunc.
+
+Use argMin(page_url, timestamp) for landing page.
+
+Use anyLast/any for dimension picks.
+
+Core orchestrator (bounce.ts)
+
+Build buckets via makeBuckets.
+
+For each bucket:
+
+Run session- or event-based SQL helper depending on mode.
+
+Apply filters, breakdown, options.timezone.
+
+Compute bounce_rate = (bounces / NULLIF(sessions,0)) * 100 safely.
+
+Return array of rows.
+
+Validation
+
+Ensure period.start < period.end; buckets non-empty.
+
+If mode="event" and session_id is missing in schema, return an error explaining requirement (or TODO: implement time-gap sessionization).
+
+If engagement.min_seconds < 0, reject.
+
+If both interaction_events and exclude_events overlap, warn (prefer exclude).
+
+Performance
+
+Indices: events(session_id, timestamp, event_name), sessions(started_at), sessions(session_id).
+
+Avoid scanning all events: constrain by bucket window and filters.
+
+For CH, use projections or materialized views if needed (document later).
+
+MCP Tool
+
+Register tool name: "compute_bounce_rate".
+
+Input: zod schema as above.
+
+Output rows exactly as specified.
+
+On error, return { code, message }.
+
+Acceptance Criteria
+
+Unit tests for:
+
+session vs event mode equivalence on synthetic data,
+
+SPA route changes toggled,
+
+engagement threshold effects,
+
+conversion short-circuit,
+
+breakdown by landing_page.
+
+Works on Postgres demo dataset; CH adapter stub compiles with TODO.
+
+
+---
+
+If you like this format, tell me the next KPI you want (Retention, DAU/WAU/MAU, Conversion, CTR, LTV, CAC, Funnel completion, etc.), and I’ll deliver **formula + Cursor MCP prompt** the same way.
