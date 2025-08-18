@@ -24,8 +24,9 @@ export async function POST(req: Request) {
   const toolsAny: Record<string, any> = buildToolsMap();
 
   const result = streamText({
-    model: openai('gpt-4o'),
-    system: 'pass a tool that requires a date range, Last 7 days starting from today',
+    model: openai('gpt-5-nano'),
+    system: `Please pass the date range of the current year and the current month to the user. 
+    It is preferable to display data in tables, but not necessary.`,
     messages: [...convertToModelMessages(messages)],
     stopWhen: stepCountIs(5),
     tools: toolsAny as any,
