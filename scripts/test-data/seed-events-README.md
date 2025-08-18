@@ -145,3 +145,4 @@ To add new event types or modify existing ones:
 - **Permissions**: Verify database user has INSERT/DELETE permissions
 - **Memory**: Large date ranges may require increased Node.js memory
 - **Timeouts**: Adjust transaction timeouts for large datasets
+

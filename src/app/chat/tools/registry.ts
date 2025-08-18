@@ -21,7 +21,14 @@ import { getChurnRateTool } from './get-churn-rate';
 import { getBounceRateTool } from './get-bounce-rate';
 import { getAverageSessionLengthTool } from './get-average-session-length';
 import { getCtrTool } from './get-click-through-rate';
-import { getEventOverviewTool } from './event-tools';
+import {
+  getEventOverviewTool,
+  getEventConversionDropoffTool,
+  getTotalEventCountTool,
+  getUniqueUsersTool,
+  getEventFrequencyPerUserTool,
+  getTotalUniqueEventsTool,
+} from './event-tools';
 
 const log = debug('umami:chat:tools');
 
@@ -248,6 +255,31 @@ export function buildToolsMap(): Record<string, any> {
       description: getEventOverviewTool.description,
       inputSchema: getEventOverviewTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getEventOverviewTool.execute(params),
+    }),
+    'get-event-conversion-dropoff': (tool as any)({
+      description: getEventConversionDropoffTool.description,
+      inputSchema: getEventConversionDropoffTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getEventConversionDropoffTool.execute(params),
+    }),
+    'get-total-event-count': (tool as any)({
+      description: getTotalEventCountTool.description,
+      inputSchema: getTotalEventCountTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getTotalEventCountTool.execute(params),
+    }),
+    'get-unique-users': (tool as any)({
+      description: getUniqueUsersTool.description,
+      inputSchema: getUniqueUsersTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getUniqueUsersTool.execute(params),
+    }),
+    'get-event-frequency-per-user': (tool as any)({
+      description: getEventFrequencyPerUserTool.description,
+      inputSchema: getEventFrequencyPerUserTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getEventFrequencyPerUserTool.execute(params),
+    }),
+    'get-total-unique-events': (tool as any)({
+      description: getTotalUniqueEventsTool.description,
+      inputSchema: getTotalUniqueEventsTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getTotalUniqueEventsTool.execute(params),
     }),
   };
 }
