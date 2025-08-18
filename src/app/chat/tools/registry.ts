@@ -21,6 +21,7 @@ import { getChurnRateTool } from './get-churn-rate';
 import { getBounceRateTool } from './get-bounce-rate';
 import { getAverageSessionLengthTool } from './get-average-session-length';
 import { getCtrTool } from './get-click-through-rate';
+import { getEventOverviewTool } from './event-tools';
 
 const log = debug('umami:chat:tools');
 
@@ -242,6 +243,11 @@ export function buildToolsMap(): Record<string, any> {
       description: getCtrTool.description,
       inputSchema: getCtrTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getCtrTool.execute(params),
+    }),
+    'get-event-overview': (tool as any)({
+      description: getEventOverviewTool.description,
+      inputSchema: getEventOverviewTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getEventOverviewTool.execute(params),
     }),
   };
 }

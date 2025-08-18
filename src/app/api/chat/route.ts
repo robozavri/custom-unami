@@ -25,8 +25,8 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: openai('gpt-5-nano'),
-    system: `Please pass the date range of the current year and the current month to the user. 
-    It is preferable to display data in tables, but not necessary.`,
+    system: `pass the date range of the current year and the current month to the tool. 
+    show tool result as table`,
     messages: [...convertToModelMessages(messages)],
     stopWhen: stepCountIs(5),
     tools: toolsAny as any,

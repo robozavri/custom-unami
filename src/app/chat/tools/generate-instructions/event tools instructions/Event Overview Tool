@@ -1,0 +1,53 @@
+Tool: Event Overview Tool
+
+👉 აერთიანებს ყველაზე საბაზისო მეტრიკებს ერთ შედეგში:
+Event count (სულ რამდენი event მოხდა)
+Unique users per event (რამდენმა უნიკალურმა მომხმარებელმა გააკეთა)
+Event frequency per user (საშუალოდ რამდენჯერ გააკეთა თითოეულმა მომხმარებელმა)
+Top events list (TOP N event-ები count-ით)
+
+1) Event count – რამდენჯერ მოხდა კონკრეტული event
+
+Formula:
+
+Event Count
+=
+COUNT(events)
+Event Count=COUNT(events)
+
+Example SQL (Postgres):
+
+SELECT COUNT(*) FROM events WHERE event_name='button_click';
+
+
+2) Unique users per event – რამდენმა უნიკალურმა მომხმარებელმა გააკეთა event
+
+Formula:
+
+\text{Unique Users} = \text{COUNT(DISTINCT user_id)}
+
+Example:
+
+SELECT COUNT(DISTINCT user_id) FROM events WHERE event_name='signup';
+
+
+3) Event frequency per user – საშუალოდ რამდენჯერ აკეთებს თითოეული მომხმარებელი
+
+Formula:
+
+Frequency=Total Event Count / Unique Users
+
+	​
+4) Top events – ყველაზე ხშირად გამოყენებული event-ები
+
+SELECT event_name, COUNT(*) as total FROM events GROUP BY event_name ORDER BY total DESC;
+
+
+
+
+
+
+
+
+
+
