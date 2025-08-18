@@ -25,6 +25,7 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: openai('gpt-4o'),
+    system: 'pass a tool that requires a date range, Last 7 days starting from today',
     messages: [...convertToModelMessages(messages)],
     stopWhen: stepCountIs(5),
     tools: toolsAny as any,

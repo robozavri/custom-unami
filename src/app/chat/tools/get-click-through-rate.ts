@@ -87,20 +87,44 @@ async function resolveWebsiteId(websiteIdInput?: string): Promise<string | null>
 }
 
 export const getCtrTool = {
-  name: 'get-ctr',
+  name: 'get-click-through-rate',
   description:
     'Compute CTR (Click-Through Rate) per bucket with attribution window and optional breakdown. Returns impressions, clicks, ctr, and unique metrics.',
   inputSchema,
   execute: async (raw: unknown): Promise<{ data: CtrRow[] }> => {
+    // eslint-disable-next-line no-console
+    console.log(
+      '[get-ctr] received params:',
+      (() => {
+        try {
+          return JSON.stringify(raw);
+        } catch {
+          return raw;
+        }
+      })(),
+    );
+
     const input = inputSchema.parse(raw);
     const websiteId = await resolveWebsiteId(input.websiteId);
     if (!websiteId) throw new Error('websiteId is required.');
+
+    // eslint-disable-next-line no-console
+    console.log('[get-ctr] query args:', {
+      websiteId,
+      date_from: input.period.start,
+      date_to: input.period.end,
+    });
 
     const rows = await getEventsForCtr({
       websiteId,
       date_from: input.period.start,
       date_to: input.period.end,
     });
+
+    // eslint-disable-next-line no-console
+    console.log('[get-ctr] db rows count:', rows.length);
+    // eslint-disable-next-line no-console
+    console.log('[get-ctr] db rows sample:', rows.slice(0, 5));
 
     // Impression predicate (event_type=1 and/or event_name matches configured keys)
     const impressionSet = new Set(input.impression_events.map(s => s.toLowerCase()));

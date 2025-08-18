@@ -47,6 +47,8 @@ export * from '@/queries/sql/reports/getUserEventsForChurn';
 export * from '@/queries/sql/reports/getBounceRate';
 export * from '@/queries/sql/reports/getAverageSessionLength';
 export * from '@/queries/sql/reports/getEventsForCtr';
+export * from '@/queries/sql/reports/getArpuRevenue';
+export * from '@/queries/sql/reports/getArpuDenominators';
 export * from '@/queries/sql/getActiveVisitors';
 export * from '@/queries/sql/getChannelMetrics';
 export * from '@/queries/sql/getRealtimeActivity';

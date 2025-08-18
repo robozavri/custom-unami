@@ -1,0 +1,240 @@
+1) ARPU — Formula & Definitions (English)
+
+Core definition:
+
+ARPU (Average Revenue Per User) measures the average revenue generated per unique user over a given period.
+
+Formula (per period bucket):
+
+\text{ARPU} = \frac{\text{Total Revenue in period}}{\text{# Unique Users in period}}
+
+Total Revenue: sum of monetary amounts (e.g., net revenue = charges − refunds − discounts, depending on your data contract).
+
+# Unique Users: distinct users with any activity in the period (you can choose “any event”, “login”, or “purchase” as the activity definition—default in this tool = any event).
+
+Works for day/week/month buckets and returns one row per bucket.
+
+Useful variants (optional flags in the tool):
+
+ARPPU (Average Revenue Per Paying User): denominator = distinct paying users in period.
+
+ARPA (per account) if you have accounts/teams.
+
+Blended ARPU across products/regions vs. segmented ARPU by filters (plan, country, product).
+
+Net vs Gross revenue: include/exclude taxes, refunds, discounts.
+
+Inputs the tool will support:
+
+period = { granularity: "day"|"week"|"month", start: ISO8601, end: ISO8601 }
+
+denominator_model = "active_users" | "paying_users" (default active_users)
+
+revenue_model = "net" | "gross" (default net)
+
+filters (e.g., product_id, country, plan)
+
+options = { timezone?: string = "UTC", currency?: "USD"|"EUR"|..., fx_table?: string } (currency normalization optional; defaults to no FX)
+
+Outputs (per bucket):
+
+{
+  "period_start": "2025-08-01",
+  "period_end": "2025-08-31",
+  "revenue": 12345.67,
+  "user_count": 850,
+  "arpu": 14.52
+}
+
+
+Edge cases & rules:
+
+If user_count = 0, ARPU = 0 (avoid divide-by-zero).
+
+Refunds/chargebacks negative amounts reduce revenue (net model).
+
+De-duplicate users; late-arriving events are not backfilled.
+
+Timezone applied when bucketing timestamps.
+
+2) Cursor Prompt — Generate MCP Tool for ARPU (DB-agnostic)
+
+Copy–paste the block below into Cursor.
+
+You are an expert TypeScript engineer. Build an MCP tool named "arpu" that computes ARPU per time bucket in a DB-agnostic way (Postgres now, ClickHouse later). Reuse the same architecture as our “churn-rate” tool: QueryRunner interface, zod validation, bucketizer, dialect-aware SQL helpers, and unit tests.
+
+## Goals
+Create a tool "compute_arpu" that returns, per bucket, total revenue, user_count, and arpu. Support:
+- denominator_model: "active_users" | "paying_users"
+- revenue_model: "net" | "gross"
+- DB-agnostic via a QueryRunner { query<T>(sql: string, params?: any[]): Promise<T[]>; dialect: "postgres"|"clickhouse" }
+
+## Input JSON Schema
+- period: {
+    granularity: "day" | "week" | "month",
+    start: string, // ISO8601
+    end: string    // ISO8601
+  }
+- denominator_model: "active_users" | "paying_users"   // default "active_users"
+- revenue_model: "net" | "gross"                       // default "net"
+- filters?: {
+    product_id?: string
+    country?: string
+    plan?: string
+  }
+- options?: {
+    timezone?: string         // default "UTC"
+    currency?: string         // e.g. "USD". If provided with fx enabled, normalize amounts.
+    use_fx?: boolean          // default false
+    fx_table?: string         // optional table name for FX, if use_fx=true
+}
+
+## Output (array of buckets)
+{
+  period_start: string,  // ISO start
+  period_end: string,    // ISO end
+  revenue: number,       // sum of amounts (normalized if FX used)
+  user_count: number,    // distinct users per denominator model
+  arpu: number           // revenue / user_count (0 if denom is 0)
+}
+
+## Logical Data Contract
+Assume we will map these to real tables via config:
+- events(user_id TEXT, timestamp TIMESTAMP)                // used to define "active users"
+- payments(user_id TEXT, amount NUMERIC, currency TEXT,    // revenue rows
+          timestamp TIMESTAMP,
+          type TEXT CHECK(type IN ('charge','refund','discount','tax')))
+- Optional: users(user_id TEXT, country TEXT, plan TEXT, product_id TEXT)
+- Optional: fx_rates(date DATE, base TEXT, quote TEXT, rate NUMERIC) // if use_fx=true
+
+## Semantics
+- Buckets are closed-open intervals [start_i, end_i) in the given timezone.
+- Revenue:
+  - revenue_model="gross": SUM of charges (and optionally tax) minus refunds? (for gross, include 'charge' + 'tax' − 'refund' − 'discount' is common). Implement:
+      gross = SUM( CASE type
+                     WHEN 'charge'  THEN amount
+                     WHEN 'tax'     THEN amount
+                     WHEN 'refund'  THEN -amount
+                     WHEN 'discount'then -amount
+                     ELSE 0 END )
+  - revenue_model="net": same as gross (above). (If the product defines a different net model later, leave a TODO but keep same default mapping for now.)
+- Denominator:
+  - "active_users": distinct users having ANY event in the bucket (from events table).
+  - "paying_users": distinct users having a payment 'charge' in the bucket (from payments table).
+- Filters: apply to users (join users table) if provided. If users table not present, skip filters.
+
+## Implementation Plan
+1) queryRunner.ts: same interface as in churn tool; PG adapter implemented, ClickHouse adapter stub with TODO.
+2) bucket.ts: time bucketing utility (reuse or similar to churn tool).
+3) sql helpers in src/sql:
+   - bucketExpr(dialect, granularity, timezone) // for date_trunc (PG) vs toStartOfX (CH)
+   - sumRevenueSql(dialect, args)      // returns SQL + params to compute revenue per bucket
+   - activeUsersSql(dialect, args)     // returns users count per bucket using events
+   - payingUsersSql(dialect, args)     // returns users count per bucket using payments
+   - optional fxJoin if use_fx=true: join fx_rates by DATE(timestamp) and currency to normalize to options.currency
+4) computeArpu(qr, input):
+   - Validate input with zod.
+   - Build buckets with bucket.ts.
+   - For each bucket:
+       - compute revenue via sumRevenueSql (with/without FX).
+       - compute user_count via (activeUsersSql | payingUsersSql).
+       - arpu = user_count > 0 ? revenue / user_count : 0.
+   - Return array of rows.
+5) FX normalization (optional):
+   - If use_fx=true and currency provided:
+     - Convert each payment row: amount_converted = amount * fx_rate(base=payment.currency, quote=options.currency, date=DATE(timestamp)).
+     - If fx rate missing, skip or fallback to 1.0; expose a warning field (omit for now, keep TODO).
+6) Performance:
+   - Ensure indices: events(user_id, timestamp), payments(user_id, timestamp), users(user_id).
+   - Prefer single pass per bucket range using GROUP BY bucket function when feasible.
+   - For CH, use toStartOfDay/Week/Month and grouping.
+
+## Dialect-Aware Snippets (illustrative)
+
+-- Postgres bucket expression
+CASE
+  WHEN :granularity='day'   THEN date_trunc('day',   (timestamp AT TIME ZONE :tz))
+  WHEN :granularity='week'  THEN date_trunc('week',  (timestamp AT TIME ZONE :tz))
+  WHEN :granularity='month' THEN date_trunc('month', (timestamp AT TIME ZONE :tz))
+END
+
+-- ClickHouse bucket expression
+CASE
+  WHEN :granularity='day'   THEN toStartOfDay(toTimeZone(timestamp, :tz))
+  WHEN :granularity='week'  THEN toStartOfWeek(toTimeZone(timestamp, :tz))
+  WHEN :granularity='month' THEN toStartOfMonth(toTimeZone(timestamp, :tz))
+END
+
+-- Revenue (PG example, net/gross same mapping for now)
+SELECT
+  {bucket_expr} AS bucket_start,
+  SUM(CASE type
+        WHEN 'charge'   THEN amount
+        WHEN 'tax'      THEN amount
+        WHEN 'refund'   THEN -amount
+        WHEN 'discount' THEN -amount
+        ELSE 0 END) AS revenue
+FROM payments p
+/* optional JOIN users u ON u.user_id=p.user_id AND filters */
+WHERE p.timestamp >= $1 AND p.timestamp < $2
+GROUP BY 1
+ORDER BY 1;
+
+-- Active users (PG)
+SELECT
+  {bucket_expr} AS bucket_start,
+  COUNT(DISTINCT e.user_id) AS user_count
+FROM events e
+/* optional JOIN users u ON u.user_id=e.user_id AND filters */
+WHERE e.timestamp >= $1 AND e.timestamp < $2
+GROUP BY 1
+ORDER BY 1;
+
+-- Paying users (PG)
+SELECT
+  {bucket_expr} AS bucket_start,
+  COUNT(DISTINCT p.user_id) AS user_count
+FROM payments p
+/* optional JOIN users u ON u.user_id=p.user_id AND filters */
+WHERE p.type='charge'
+  AND p.timestamp >= $1 AND p.timestamp < $2
+GROUP BY 1
+ORDER BY 1;
+
+## File Layout
+- src/
+  - index.ts
+  - schema.ts
+  - queryRunner.ts
+  - bucket.ts
+  - arpu.ts                 // exports computeArpu(...)
+  - sql/
+    - buckets.ts
+    - revenue.ts
+    - activeUsers.ts
+    - payingUsers.ts
+  - mcp/tools.ts            // registers "compute_arpu"
+- test/
+  - arpu.spec.ts
+- README.md                 // how to configure PG now, CH later
+
+## Coding Requirements
+- TypeScript strict mode; ESM.
+- zod for schema; never trust input.
+- No ORM; write SQL strings with parametrization.
+- Handle empty buckets: if revenue or users missing for a bucket, treat as 0.
+- Return sorted by bucket_start ascending.
+
+## MCP Registration
+Register tool name: "compute_arpu"
+Description: "Compute ARPU (and ARPPU via denominator_model) by time bucket"
+On error, return structured { code, message }.
+
+## Acceptance Criteria
+- Unit tests for:
+  - day/week/month bucketing
+  - active_users vs paying_users denominator
+  - refunds/discounts lowering revenue
+  - divide-by-zero safety
+- Working PG demo with seed data.
+- CH dialect stubs compile; TODO noted for date/time funcs differences.
