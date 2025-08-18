@@ -19,6 +19,7 @@ import { getDetectSegmentShiftsTool } from './anomaly-insights';
 import { getDetectRetentionDipsTool } from './anomaly-insights';
 import { getChurnRateTool } from './get-churn-rate';
 import { getBounceRateTool } from './get-bounce-rate';
+import { getAverageSessionLengthTool } from './get-average-session-length';
 
 const log = debug('umami:chat:tools');
 
@@ -230,6 +231,11 @@ export function buildToolsMap(): Record<string, any> {
       description: getBounceRateTool.description,
       inputSchema: getBounceRateTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getBounceRateTool.execute(params),
+    }),
+    'get-average-session-length': (tool as any)({
+      description: getAverageSessionLengthTool.description,
+      inputSchema: getAverageSessionLengthTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getAverageSessionLengthTool.execute(params),
     }),
   };
 }

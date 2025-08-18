@@ -45,6 +45,7 @@ export * from '@/queries/sql/anomaly-insights/getSegmentTotals';
 export * from '@/queries/sql/anomaly-insights/getRetentionCohorts';
 export * from '@/queries/sql/reports/getUserEventsForChurn';
 export * from '@/queries/sql/reports/getBounceRate';
+export * from '@/queries/sql/reports/getAverageSessionLength';
 export * from '@/queries/sql/getActiveVisitors';
 export * from '@/queries/sql/getChannelMetrics';
 export * from '@/queries/sql/getRealtimeActivity';

@@ -1,0 +1,388 @@
+Great—next KPI/tool: Average Session Length.
+Below you’ll get (1) a crisp English definition & variants, and (2) a ready-to-paste Cursor prompt that makes a DB-agnostic MCP tool (Postgres now, ClickHouse later).
+
+1) Average Session Length — Formula & Definitions (English)
+
+Core definition
+
+The average time users spend in a session during a period.
+
+Formula (generic):
+
+Average Session Length
+=
+∑
+session_duration
+𝑖
+#
+sessions
+Average Session Length=
+#sessions
+∑session_duration
+i
+	​
+
+	​
+
+
+Where a session’s duration is defined by one of the following (configurable):
+
+Elapsed duration (default):
+
+session_duration
+=
+last_event_ts
+−
+first_event_ts
+session_duration=last_event_ts−first_event_ts
+
+Engagement duration (if tracked):
+Use a measured field like engagement_time_s from the sessions table (excludes idle time).
+
+Common options / nuances
+
+Include/exclude bounces: bounces (1-page sessions) can be excluded to avoid skew.
+
+Min/Max caps: cap each session duration to sensible bounds (e.g., 1s–2h).
+
+Event filters: exclude heartbeats/keep-alives when computing first/last event.
+
+Sessionization (if no sessions table): group events by session_id. If session_id is absent, you can later add gap-based sessionization (not required now).
+
+Percentiles: optional p50/p90/p95 for distribution visibility.
+
+Time zone: bucket sessions by start time in a chosen TZ.
+
+Inputs your tool should accept
+
+period: { granularity: "day"|"week"|"month", start, end }
+
+mode: "session" | "event"
+
+duration_metric: "elapsed" | "engagement_time"
+
+include_bounces: boolean (default true)
+
+caps?: { min_seconds?: number, max_seconds?: number }
+
+interaction_events: string[] (to identify non-bounce interactions; used if excluding bounces in event mode)
+
+exclude_events?: string[] (e.g., ["heartbeat","sdk_keepalive"])
+
+percentiles?: number[] (e.g., [50,90,95])
+
+breakdown?: { by?: "landing_page"|"device"|"country"|"utm_source"|null }
+
+filters?: { country?, device?, utm_source?, product_id?, path_prefix? }
+
+options?: { timezone?: string, session_timeout_minutes?: number }
+
+Logical data contract (DB-agnostic)
+
+events(user_id, session_id, timestamp, event_name, page_url, device, country, utm_source, …)
+
+sessions(session_id, user_id, started_at, ended_at?, engagement_time_s?, pageviews, landing_page, device, country, utm_source, …)
+
+Output (per bucket x optional breakdown)
+
+{
+  "period_start": "2025-08-01",
+  "period_end": "2025-08-31",
+  "dimension": { "device": "mobile" },
+  "sessions": 8123,
+  "total_duration_s": 456789,
+  "avg_session_length_s": 56.25,
+  "percentiles": { "p50": 31, "p90": 160, "p95": 240 }   // present only if requested
+}
+
+
+Edge cases
+
+Sessions with zero/negative duration (clock skew, duplicates): clamp to >= 0s, apply caps if provided.
+
+If include_bounces=false, define a bounce as pageviews ≤ 1 and no qualifying interaction_events.
+
+If duration_metric="engagement_time" and the field is missing, fall back to elapsed duration with a warning.
+
+2) Cursor Prompt — Generate MCP Tool for Average Session Length (DB-agnostic)
+
+Copy–paste everything between the lines into Cursor.
+
+You are an expert TypeScript engineer. Build an MCP tool named "average-session-length" that computes Average Session Length in a DB-agnostic way (Postgres now; ClickHouse later). Follow this spec exactly.
+
+## Goals
+- Expose an MCP tool "compute_average_session_length" that returns per-bucket (and optional breakdown) session counts, total duration seconds, average session length (seconds), and optional percentiles.
+- Support two modes:
+  1) "session"  -> use a sessions table if present
+  2) "event"    -> derive per-session first/last timestamps from events grouped by session_id
+- Keep logic DB-agnostic via a QueryRunner interface with dialect-aware SQL helpers.
+
+## Inputs (zod schema)
+- period: {
+    granularity: "day" | "week" | "month",
+    start: string,  // ISO
+    end: string     // ISO
+  }
+- mode: "session" | "event"
+- duration_metric: "elapsed" | "engagement_time"
+- include_bounces: boolean  // default true
+- caps?: { min_seconds?: number; max_seconds?: number }
+- interaction_events: string[]            // used to detect bounces if include_bounces=false
+- exclude_events?: string[]               // e.g., ["heartbeat", "sdk_keepalive"]
+- percentiles?: number[]                  // e.g., [50,90,95]
+- breakdown?: { by?: "landing_page" | "device" | "country" | "utm_source" | null }
+- filters?: {
+    country?: string; device?: string; utm_source?: string; product_id?: string; path_prefix?: string;
+  }
+- options?: {
+    timezone?: string;              // default "UTC"
+    session_timeout_minutes?: number // default 30, only relevant if we later add gap-based sessionization
+  }
+
+## Output
+Return an array of rows:
+{
+  period_start: string,          // ISO
+  period_end: string,            // ISO
+  dimension?: Record<string,string>,
+  sessions: number,
+  total_duration_s: number,
+  avg_session_length_s: number,
+  percentiles?: Record<string, number>  // keys like "p50","p90","p95"
+}
+
+## Data Contract (Logical)
+- events(
+    user_id TEXT, session_id TEXT, timestamp TIMESTAMP,
+    event_name TEXT, page_url TEXT, device TEXT, country TEXT, utm_source TEXT, ...
+  )
+- sessions(
+    session_id TEXT, user_id TEXT, started_at TIMESTAMP, ended_at TIMESTAMP NULL,
+    engagement_time_s INT NULL, pageviews INT,
+    landing_page TEXT, device TEXT, country TEXT, utm_source TEXT, ...
+  )
+
+## Architecture
+- src/
+  - index.ts                  // MCP bootstrap + tool registration
+  - schema.ts                 // zod input/output types
+  - bucket.ts                 // time bucket generator [start, end)
+  - queryRunner.ts            // QueryRunner interface + Postgres adapter (+ ClickHouse stub)
+  - avgSession.ts             // orchestrator that executes per-mode logic and assembles output
+  - sql/
+    - sessionMode.ts          // SQL helpers for sessions table path
+    - eventMode.ts            // SQL helpers for events path
+  - util/
+    - filters.ts              // WHERE clause builder
+    - math.ts                 // percentile calc fallback if DB lacks quantile
+- test/
+  - avgSession.spec.ts
+
+## QueryRunner Interface
+```ts
+export interface QueryRunner {
+  dialect: "postgres" | "clickhouse";
+  query<T = any>(sql: string, params?: any[]): Promise<T[]>;
+}
+
+Bucketizer
+export type Granularity = "day" | "week" | "month";
+export function makeBuckets(startISO: string, endISO: string, g: Granularity, tz="UTC"): Array<{start: string; end: string}> {
+  // Return closed-open buckets [start, end)
+}
+
+Session Mode (duration_metric="engagement_time" or "elapsed")
+
+Definitions:
+
+Base duration per session:
+
+If duration_metric="engagement_time" and sessions.engagement_time_s is not null, use it.
+
+Else duration_metric="elapsed": use coalesce(ended_at, last_event_ts) - started_at.
+
+If include_bounces=false, exclude sessions where pageviews <= 1 AND has no qualifying interaction events.
+
+Pseudo-SQL (Postgres-like)
+-- Base sessions inside bucket
+WITH base AS (
+  SELECT s.session_id, s.started_at, s.ended_at, s.engagement_time_s,
+         s.pageviews, s.landing_page, s.device, s.country, s.utm_source
+  FROM sessions s
+  WHERE s.started_at >= :bucket_start AND s.started_at < :bucket_end
+    /* + filters, incl. landing_page LIKE :path_prefix% if provided */
+),
+interactions AS (
+  SELECT e.session_id,
+         BOOL_OR(e.event_name = ANY(:interaction_events)) AS has_interaction
+  FROM events e
+  JOIN base b USING (session_id)
+  WHERE e.timestamp >= :bucket_start AND e.timestamp < :bucket_end
+    AND NOT (e.event_name = ANY(:exclude_events))
+  GROUP BY e.session_id
+),
+scored AS (
+  SELECT
+    b.session_id, b.landing_page, b.device, b.country, b.utm_source, b.pageviews,
+    CASE
+      WHEN :duration_metric = 'engagement_time' AND b.engagement_time_s IS NOT NULL
+        THEN GREATEST(0, b.engagement_time_s)
+      ELSE
+        GREATEST(
+          0,
+          EXTRACT(EPOCH FROM (COALESCE(b.ended_at, b.started_at) - b.started_at))::int
+        )
+    END AS duration_s,
+    COALESCE(i.has_interaction, false) AS has_interaction
+  FROM base b
+  LEFT JOIN interactions i ON i.session_id = b.session_id
+),
+filtered AS (
+  SELECT *
+  FROM scored
+  WHERE (:include_bounces)
+     OR (pageviews > 1 AND has_interaction = true)
+),
+capped AS (
+  SELECT
+    *,
+    LEAST(
+      COALESCE(:max_seconds, duration_s),
+      GREATEST(COALESCE(:min_seconds, 0), duration_s)
+    ) AS duration_capped_s
+  FROM filtered
+)
+SELECT
+  DATE_TRUNC(:granularity, MIN(s.started_at) AT TIME ZONE :tz) AS bucket_start,
+  /* optional breakdown projection here (landing_page/device/country/utm_source) */,
+  COUNT(*) AS sessions,
+  SUM(duration_capped_s) AS total_duration_s
+FROM capped s
+GROUP BY bucket_start, /* breakdown cols */;
+
+Event Mode (derive per-session durations from events)
+
+Definitions:
+
+duration = last_event_ts - first_event_ts (exclude exclude_events).
+
+If include_bounces=false, require an interaction AFTER the first event.
+
+Pseudo-SQL (Postgres-like)
+WITH ev AS (
+  SELECT e.session_id,
+         MIN(e.timestamp) AS first_ts,
+         MAX(e.timestamp) AS last_ts,
+         MIN(e.page_url)  FILTER (WHERE e.timestamp = MIN(e.timestamp)) AS landing_page,
+         BOOL_OR( (e.event_name = ANY(:interaction_events)) AND e.timestamp > MIN(e.timestamp) ) AS has_interaction,
+         ANY_VALUE(e.device) AS device,
+         ANY_VALUE(e.country) AS country,
+         ANY_VALUE(e.utm_source) AS utm_source
+  FROM events e
+  WHERE e.timestamp >= :bucket_start AND e.timestamp < :bucket_end
+    AND NOT (e.event_name = ANY(:exclude_events))
+  GROUP BY e.session_id
+),
+scored AS (
+  SELECT
+    session_id, landing_page, device, country, utm_source,
+    GREATEST(0, EXTRACT(EPOCH FROM (last_ts - first_ts))::int) AS duration_s,
+    has_interaction
+  FROM ev
+),
+filtered AS (
+  SELECT *
+  FROM scored
+  WHERE (:include_bounces)
+     OR (has_interaction = true)
+),
+capped AS (
+  SELECT *,
+    LEAST(
+      COALESCE(:max_seconds, duration_s),
+      GREATEST(COALESCE(:min_seconds, 0), duration_s)
+    ) AS duration_capped_s
+  FROM filtered
+)
+SELECT
+  DATE_TRUNC(:granularity, MIN(first_ts) AT TIME ZONE :tz) AS bucket_start,
+  /* optional breakdown */,
+  COUNT(*) AS sessions,
+  SUM(duration_capped_s) AS total_duration_s
+FROM capped
+GROUP BY bucket_start, /* breakdown cols */;
+
+ClickHouse notes
+
+Use date_trunc('day'|'week'|'month', ts, tz) or toStartOfDay/Week/Month.
+
+argMin(page_url, timestamp) to get landing page; any/anyLast for dimension selection.
+
+Replace BOOL_OR with max(if(cond,1,0))=1 style expressions.
+
+Orchestrator (avgSession.ts)
+
+Build buckets via makeBuckets.
+
+For each bucket:
+
+Run the appropriate SQL helper (session or event mode).
+
+Aggregate sessions and total_duration_s.
+
+Compute avg_session_length_s = total_duration_s / NULLIF(sessions, 0).
+
+If percentiles requested:
+
+Prefer DB quantile functions (Postgres: percentile_disc/percentile_cont via window; CH: quantile, quantileExact).
+
+If unavailable, fetch per-session durations and compute in TS (util/math.ts).
+
+Return rows with optional percentiles.
+
+Validation
+
+Ensure period.start < period.end.
+
+If duration_metric="engagement_time" but column missing, fall back to elapsed + include a warning in the tool’s message.
+
+If include_bounces=false and interaction_events is empty, throw a validation error.
+
+caps.min_seconds <= caps.max_seconds if both provided.
+
+Performance
+
+Indices: events(session_id, timestamp, event_name), sessions(started_at), sessions(session_id).
+
+Constrain all queries by bucket window and filters.
+
+Avoid heavy percentile work by making it optional.
+
+MCP Tool Registration
+
+Tool name: "compute_average_session_length".
+
+Input schema as above; output rows exactly as specified.
+
+On error, return a structured { code, message }.
+
+Acceptance Criteria
+
+Unit tests for:
+
+session vs event parity on synthetic data,
+
+include_bounces toggle,
+
+duration caps,
+
+percentiles,
+
+breakdowns (landing_page/device/etc.).
+
+Works end-to-end on Postgres demo; ClickHouse adapter compiles with TODO for SQL differences.
+
+
+---
+
+If you want, we can continue in this exact style with the next KPI (e.g., **Retention**, **DAU/WAU/MAU**, **Conversion Rate**, **CTR**, **Funnel completion**, **LTV**, **CAC**).
