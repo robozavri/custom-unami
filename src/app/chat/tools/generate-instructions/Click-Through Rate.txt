@@ -1,0 +1,373 @@
+Great—next KPI/tool: CTR (Click-Through Rate).
+You’ll get (1) a clear English definition & variants, and (2) a ready-to-paste Cursor prompt that builds a DB-agnostic MCP tool (Postgres now; ClickHouse later).
+
+1) CTR — Formula & Definitions (English)
+
+Core definition
+
+The percentage of impressions that resulted in a click within a defined attribution window.
+
+Formula (aggregate):
+
+CTR
+=
+Clicks
+Impressions
+×
+100
+CTR=
+Impressions
+Clicks
+	​
+
+×100
+
+Element/page/ad variants
+
+Element CTR (e.g., button/link): clicks on element ÷ impressions (element was rendered/visible).
+
+Page CTR (outbound): outbound clicks ÷ page views.
+
+Ad CTR: ad clicks ÷ ad impressions (respect ad viewability rules).
+
+Unique vs total
+
+Total CTR: total clicks ÷ total impressions.
+
+Unique CTR: unique users who clicked ÷ unique users who saw.
+
+Attribution window
+
+Count a click for an impression only if it occurs after the impression and within click_within_ms (e.g., 30 min).
+
+Viewability (optional)
+
+Treat an impression as valid only if view_time_ms ≥ min_view_time_ms or scroll_depth ≥ X%.
+
+Data contract (logical, DB-agnostic)
+
+events(user_id, session_id, timestamp, event_name, page_url, element_id, element_href, campaign_id, device, country, utm_source, view_time_ms, scroll_depth, ...)
+
+Impression event names (configurable): e.g., page_view, element_impression, ad_impression
+
+Click event names (configurable): e.g., click, ad_click, outbound_click
+
+Output (per time bucket and optional breakdown)
+
+{
+  "period_start": "2025-08-01",
+  "period_end": "2025-08-31",
+  "dimension": { "element_id": "buy-btn" },
+  "impressions": 12045,
+  "clicks": 842,
+  "ctr": 6.99,
+  "unique_impressions": 10012,
+  "unique_clicks": 721,
+  "unique_ctr": 7.20
+}
+
+
+Edge cases & nuances
+
+De-dupe repeated rapid clicks from the same user/session with dedupe_clicks_ms (e.g., treat multiple clicks within 1s as one).
+
+SPA route changes: if you count route_change as a page impression, set an option to include it.
+
+Bot/automation noise: allow exclude_user_agents or exclude_events.
+
+Missing element_id: group by page_url instead.
+
+Ensure ctr is 0 when impressions = 0 (no divide-by-zero).
+
+2) Cursor Prompt — Generate MCP Tool for CTR (DB-agnostic)
+
+Copy–paste everything between the lines into Cursor.
+
+You are an expert TypeScript engineer. Build an MCP tool named "ctr" that computes Click-Through Rate (CTR) in a DB-agnostic way (Postgres now; ClickHouse later). Follow this spec exactly.
+
+## Goals
+- Expose an MCP tool "compute_ctr" that returns, per time bucket (and optional breakdown), impressions, clicks, CTR%, and unique CTR%.
+- Attribute clicks to impressions within a forward-looking time window (click_within_ms).
+- Keep logic DB-agnostic via a QueryRunner interface and dialect-aware SQL helpers.
+
+## Inputs (zod schema)
+- period: {
+    granularity: "day" | "week" | "month",
+    start: string,  // ISO
+    end: string     // ISO
+  }
+- impression_events: string[]     // e.g., ["page_view","element_impression","ad_impression"]
+- click_events: string[]          // e.g., ["click","ad_click","outbound_click"]
+- breakdown?: {
+    by?: "element_id" | "page_url" | "campaign_id" | "device" | "country" | "utm_source" | null
+  }
+- filters?: {
+    element_id?: string;
+    page_url_prefix?: string;
+    campaign_id?: string;
+    device?: string;
+    country?: string;
+    utm_source?: string;
+  }
+- attribution?: {
+    click_within_ms?: number;     // default 30*60*1000 (30 minutes)
+    dedupe_clicks_ms?: number;    // default 1000 (1 second)
+  }
+- viewability?: {
+    min_view_time_ms?: number;    // optional; if present, an impression must meet it
+    min_scroll_depth_pct?: number;// optional; e.g., 25 means at least 25% scroll
+  }
+- uniqueness?: {
+    mode?: "total" | "unique" | "both";  // default "both"
+  }
+- options?: {
+    timezone?: string;                    // default "UTC"
+    treat_route_change_as_view?: boolean; // default false
+  }
+- exclude?: {
+    events?: string[];            // e.g., ["heartbeat","sdk_keepalive"]
+    user_agents_like?: string[];  // e.g., ["HeadlessChrome","puppeteer"]
+  }
+
+## Output
+Return an array of rows:
+{
+  period_start: string,      // ISO
+  period_end: string,        // ISO
+  dimension?: Record<string,string>,
+  impressions: number,
+  clicks: number,
+  ctr: number,               // 0..100
+  unique_impressions?: number,
+  unique_clicks?: number,
+  unique_ctr?: number        // 0..100
+}
+
+## Data Contract (Logical)
+- events(
+    user_id TEXT, session_id TEXT, timestamp TIMESTAMP, event_name TEXT,
+    page_url TEXT, element_id TEXT, element_href TEXT,
+    campaign_id TEXT, device TEXT, country TEXT, utm_source TEXT,
+    view_time_ms INT NULL, scroll_depth INT NULL, user_agent TEXT NULL, ...
+  )
+
+## Architecture
+- src/
+  - index.ts                 // MCP bootstrap + tool registration
+  - schema.ts                // zod input/output
+  - bucket.ts                // time bucket generator [start, end)
+  - queryRunner.ts           // QueryRunner interface + Postgres adapter + ClickHouse stub
+  - ctr.ts                   // orchestrator (loops buckets, assembles output)
+  - sql/
+    - impressions.ts         // dialect-aware SQL for impressions per bucket x breakdown
+    - clicks.ts              // dialect-aware SQL for attributed clicks per bucket x breakdown
+    - unique.ts              // dialect-aware SQL for unique counts (users who saw / clicked)
+  - util/
+    - filters.ts             // WHERE clause builder for filters/exclusions
+    - time.ts                // helpers for timezone truncation and date literals
+- test/
+  - ctr.spec.ts
+
+## QueryRunner Interface
+```ts
+export interface QueryRunner {
+  dialect: "postgres" | "clickhouse";
+  query<T = any>(sql: string, params?: any[]): Promise<T[]>;
+}
+
+Bucketizer
+export type Granularity = "day"|"week"|"month";
+export function makeBuckets(startISO: string, endISO: string, g: Granularity, tz="UTC"): Array<{start: string; end: string}> {
+  // Return closed-open buckets [start, end)
+}
+
+Core Definitions
+
+Impression row = events where event_name IN (:impression_events), optionally filtered by viewability (view_time_ms, scroll_depth).
+
+Click row = events where event_name IN (:click_events).
+
+Attribution: a click belongs to the most recent impression of the same breakdown key by the same user/session that occurred BEFORE the click AND within :click_within_ms.
+
+Breakdown key set depends on breakdown.by (e.g., element_id). If none, attribute by user/session only.
+
+Dedupe repeated clicks by same user/session on same key within :dedupe_clicks_ms.
+
+Pseudo-SQL (Postgres-like)
+1) Base scoped events in bucket
+WITH scoped AS (
+  SELECT *
+  FROM events
+  WHERE timestamp >= :bucket_start AND timestamp < :bucket_end
+    AND NOT (event_name = ANY(:exclude_events))
+    AND (:ua_len = 0 OR NOT EXISTS (
+          SELECT 1 WHERE events.user_agent ILIKE ANY(:user_agents_like)
+        ))
+)
+
+2) Impressions with viewability + breakdown columns
+impressions AS (
+  SELECT
+    user_id, session_id, timestamp AS imp_ts,
+    COALESCE(element_id, '') AS element_id,
+    page_url, campaign_id, device, country, utm_source
+  FROM scoped
+  WHERE event_name = ANY(:impression_events)
+    AND (:min_view_time_ms IS NULL OR COALESCE(view_time_ms,0) >= :min_view_time_ms)
+    AND (:min_scroll_depth_pct IS NULL OR COALESCE(scroll_depth,0) >= :min_scroll_depth_pct)
+    /* + filters (element_id, page_url_prefix, campaign_id, device, country, utm_source) */
+)
+
+3) Clicks (de-duped within dedupe window)
+raw_clicks AS (
+  SELECT
+    user_id, session_id, timestamp AS click_ts,
+    COALESCE(element_id, '') AS element_id,
+    page_url, campaign_id, device, country, utm_source
+  FROM scoped
+  WHERE event_name = ANY(:click_events)
+),
+clicks AS (
+  SELECT *
+  FROM (
+    SELECT rc.*,
+           LAG(rc.timestamp) OVER (
+             PARTITION BY user_id, session_id,
+                          COALESCE(CASE WHEN :breakdown_by='element_id' THEN element_id
+                                        WHEN :breakdown_by='page_url'   THEN page_url
+                                        WHEN :breakdown_by='campaign_id' THEN campaign_id
+                                        WHEN :breakdown_by='device'     THEN device
+                                        WHEN :breakdown_by='country'    THEN country
+                                        WHEN :breakdown_by='utm_source' THEN utm_source
+                                        ELSE '' END,'')
+             ORDER BY rc.timestamp
+           ) AS prev_ts
+    FROM raw_clicks rc
+  ) t
+  WHERE :dedupe_clicks_ms IS NULL
+     OR prev_ts IS NULL
+     OR EXTRACT(EPOCH FROM (t.timestamp - t.prev_ts))*1000 > :dedupe_clicks_ms
+)
+
+4) Attribute clicks to impressions (nearest prior within window)
+-- For performance, join on user/session and same breakdown key, and require imp_ts <= click_ts
+-- Use DISTINCT ON for nearest-prior match in Postgres; in ClickHouse use argMax with condition.
+attributed AS (
+  SELECT c.*,
+         i.imp_ts
+  FROM clicks c
+  JOIN LATERAL (
+    SELECT i.imp_ts
+    FROM impressions i
+    WHERE i.user_id = c.user_id
+      AND i.session_id = c.session_id
+      AND i.imp_ts <= c.click_ts
+      AND (:breakdown_by IS NULL OR
+           (CASE
+              WHEN :breakdown_by='element_id' THEN i.element_id = c.element_id
+              WHEN :breakdown_by='page_url'   THEN i.page_url   = c.page_url
+              WHEN :breakdown_by='campaign_id' THEN i.campaign_id = c.campaign_id
+              WHEN :breakdown_by='device'     THEN i.device     = c.device
+              WHEN :breakdown_by='country'    THEN i.country    = c.country
+              WHEN :breakdown_by='utm_source' THEN i.utm_source = c.utm_source
+              ELSE TRUE
+            END))
+    ORDER BY i.imp_ts DESC
+    LIMIT 1
+  ) i ON TRUE
+  WHERE (:click_within_ms IS NULL)
+     OR (EXTRACT(EPOCH FROM (c.click_ts - i.imp_ts))*1000 <= :click_within_ms)
+)
+
+5) Aggregate totals per bucket x breakdown
+-- Totals
+SELECT
+  DATE_TRUNC(:granularity, :bucket_start AT TIME ZONE :tz) AS bucket_start,
+  DATE_TRUNC(:granularity, :bucket_end   AT TIME ZONE :tz) AS bucket_end,
+  /* breakdown projection */ 
+  COUNT(*) FILTER (WHERE 1=1 FROM impressions) AS impressions -- (computed separately per bucket),
+  COUNT(*) FROM attributed AS clicks,                          -- (computed separately per bucket)
+  -- In practice, run two queries or pre-aggregate impressions and attributed clicks, then join by breakdown key.
+
+
+(Implementation detail: run two grouped queries—one for impressions, one for attributed clicks—then merge by key in TypeScript. This avoids double counting and simplifies JOIN logic.)
+
+6) Unique counts
+
+Unique impressions: COUNT(DISTINCT user_id) on impressions per key.
+
+Unique clicks: COUNT(DISTINCT user_id) on attributed clicks per key.
+
+ClickHouse notes
+
+Use date_trunc('day'|'week'|'month', ts, tz) or toStartOfDay/Week/Month.
+
+Replace DISTINCT ON with argMax/argMin patterns:
+
+nearest-prior impression = argMax(imp_ts, imp_ts) WHERE imp_ts <= click_ts.
+
+For unique counts, prefer countDistinct(user_id).
+
+Orchestrator (ctr.ts)
+
+Build buckets via makeBuckets.
+
+For each bucket:
+
+Query impressions per breakdown (totals + unique).
+
+Query attributed clicks per breakdown (totals + unique).
+
+Merge rows by breakdown key; compute:
+
+ctr = impressions ? (clicks / impressions) * 100 : 0
+
+If uniqueness.mode includes unique: unique_ctr = unique_impressions ? (unique_clicks / unique_impressions) * 100 : undefined
+
+Return rows; include dimension object when breakdown is requested.
+
+Validation
+
+Require non-empty impression_events and click_events.
+
+Ensure period.start < period.end.
+
+If viewability.min_view_time_ms < 0 or attribution.* < 0, reject.
+
+If breakdown.by provided but column missing in data, return a clear error.
+
+Performance
+
+Indices: events(timestamp, event_name), plus selective indices on (element_id), (page_url), (campaign_id), (user_id, session_id).
+
+Constrain by bucket window and filters.
+
+Consider pre-materializing impressions and de-duped clicks in views.
+
+MCP Tool Registration
+
+Tool name: "compute_ctr".
+
+Input schema as above; output rows exactly as specified.
+
+On error, return a structured { code, message }.
+
+Acceptance Criteria
+
+Unit tests covering:
+
+total vs unique CTR,
+
+attribution window effects,
+
+click de-duplication,
+
+viewability thresholds,
+
+each breakdown type,
+
+zero-impression buckets (ctr=0) and edge cases.
+
+
+---
+
