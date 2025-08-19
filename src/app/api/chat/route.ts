@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const toolsAny: Record<string, any> = buildToolsMap();
 
   const result = streamText({
-    model: openai('gpt-5-nano'),
+    model: openai('gpt-4o-mini'),
     system: `pass the date range of the current year and the current month to the tool. 
     show tool result as table`,
     messages: [...convertToModelMessages(messages)],

@@ -28,6 +28,11 @@ import {
   getUniqueUsersTool,
   getEventFrequencyPerUserTool,
   getTotalUniqueEventsTool,
+  // Event Trends Tools
+  getEventsPerPeriodTool,
+  getReturningEventUsersTool,
+  getSegmentedEventsTool,
+  getEventTrendsTool,
 } from './event-tools';
 
 const log = debug('umami:chat:tools');
@@ -280,6 +285,27 @@ export function buildToolsMap(): Record<string, any> {
       description: getTotalUniqueEventsTool.description,
       inputSchema: getTotalUniqueEventsTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getTotalUniqueEventsTool.execute(params),
+    }),
+    // Event Trends Tools
+    'get-events-per-period': (tool as any)({
+      description: getEventsPerPeriodTool.description,
+      inputSchema: getEventsPerPeriodTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getEventsPerPeriodTool.execute(params),
+    }),
+    'get-returning-event-users': (tool as any)({
+      description: getReturningEventUsersTool.description,
+      inputSchema: getReturningEventUsersTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getReturningEventUsersTool.execute(params),
+    }),
+    'get-segmented-events': (tool as any)({
+      description: getSegmentedEventsTool.description,
+      inputSchema: getSegmentedEventsTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getSegmentedEventsTool.execute(params),
+    }),
+    'get-event-trends': (tool as any)({
+      description: getEventTrendsTool.description,
+      inputSchema: getEventTrendsTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getEventTrendsTool.execute(params),
     }),
   };
 }

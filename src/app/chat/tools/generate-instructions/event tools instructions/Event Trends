@@ -1,0 +1,124 @@
+Events per period ისთვის საჭირო ქვე თულები:
+
+დროში დინამიკისთვის:
+
+1) Events per period (დღე/კვირა/თვე):
+
+👉 მიზანი: რამდენი event ხდება დროში (დღე/კვირა/თვე).
+
+Formula:
+
+Events Per Period
+=
+COUNT(events)
+  
+  
+GROUP BY period
+Events Per Period=COUNT(events)GROUP BY period
+
+Example SQL (Postgres):
+
+SELECT date_trunc('day', timestamp) AS day,
+       COUNT(*) AS events_count
+FROM events
+WHERE timestamp BETWEEN '2025-08-01' AND '2025-08-10'
+GROUP BY 1
+ORDER BY 1;
+
+
+როგორ მუშაობს:
+
+Timestamp-ს ვჭრით სასურველ granularit-ზე (day, week, month).
+
+ვითვლით event-ების რაოდენობას თითო bucket-ში.
+
+
+2)Returning event users (რამდენი user იმეორებს იგივე event-ს დროში):
+მიზანი: რამდენი უნიკალური user ბრუნდება და იმეორებს იგივე event-ს სხვადასხვა პერიოდში.
+
+Formula:
+
+Returning Users (period n)
+=
+Users who did event in period n AND also in previous period(s)
+Users in period n
+Returning Users (period n)=
+Users in period n
+Users who did event in period n AND also in previous period(s)
+	​
+
+
+Example SQL (Postgres):
+
+WITH user_events AS (
+  SELECT user_id,
+         date_trunc('week', timestamp) AS week
+  FROM events
+  WHERE event_name = 'purchase'
+  GROUP BY user_id, date_trunc('week', timestamp)
+)
+SELECT this.week,
+       COUNT(DISTINCT this.user_id) AS total_users,
+       COUNT(DISTINCT CASE WHEN prev.user_id IS NOT NULL THEN this.user_id END) AS returning_users
+FROM user_events this
+LEFT JOIN user_events prev
+       ON this.user_id = prev.user_id
+      AND this.week = prev.week + interval '1 week'
+GROUP BY this.week
+ORDER BY this.week;
+
+
+როგორ მუშაობს:
+
+ვიღებთ მომხმარებლის event + period კომბინაციებს.
+
+ვამოწმებთ იყვნენ თუ არა იგივე user წინა bucket-ში.
+
+შედეგი გვიჩვენებს: “რამდენი დაბრუნდა იმავე event-ზე”.
+
+3)Segmented events (ქვეყნის/დივაისის/გეგმების მიხედვით განსხვავებები):
+ეს არის სეგმენტაცია + ტაიმლაინი.
+👉 მიზანი: როგორ განსხვავდება event-ების რაოდენობა სეგმენტების მიხედვით (ქვეყანა, მოწყობილობა, გეგმა, და სხვ.).
+
+Formula:
+
+Segmented Events
+=
+COUNT(events)
+  
+  
+GROUP BY segment
+Segmented Events=COUNT(events)GROUP BY segment
+
+Example SQL (Postgres):
+
+SELECT country,
+       COUNT(*) AS events_count
+FROM events e
+JOIN users u ON e.user_id = u.user_id
+WHERE e.event_name = 'signup'
+GROUP BY country
+ORDER BY events_count DESC;
+
+
+როგორ მუშაობს:
+
+ვაერთიანებთ events და users ცხრილებს.
+
+ვახარისხებთ სეგმენტებით (მაგ. country, device_type, plan).
+
+ვითვლით event count თითო სეგმენტზე.
+
+✅ მოკლედ:
+
+Events per period → COUNT(events) grouped by time bucket.
+
+Returning event users → მომხმარებლის event არსებობა მიმდინარე + წინა bucket-ში.
+
+Segmented events → COUNT(events) grouped by user properties (country/device/plan).
+
+
+
+
+
+
