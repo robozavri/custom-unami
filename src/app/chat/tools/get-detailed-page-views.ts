@@ -5,11 +5,20 @@ import prisma from '@/lib/prisma';
 import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
 import { DEFAULT_WEBSITE_ID } from '../config';
 
+// Debug function that can be toggled
+const DEBUG = false; // Force enable debug for troubleshooting
+const debugLog = (message: string, data?: any) => {
+  if (DEBUG) {
+    // eslint-disable-next-line no-console
+    console.log(`🔍 [DEBUG] ${message}`, data);
+  }
+};
+
 function toDateOnly(date: Date) {
   return formatISO(date, { representation: 'date' });
 }
 
-async function resolveWebsiteId(websiteIdInput?: string): Promise<string | null> {
+async function resolveWebsiteId(websiteIdInput?: string): Promise<string> {
   if (websiteIdInput) return websiteIdInput;
   const active = getActiveWebsiteId();
   if (active) return active;
@@ -22,7 +31,9 @@ async function resolveWebsiteId(websiteIdInput?: string): Promise<string | null>
     setActiveWebsiteId(first.id);
     return first.id;
   }
-  return null;
+  throw new Error(
+    'No website ID found. Please provide a websiteId or ensure there are websites in the database.',
+  );
 }
 
 const paramsSchema = z.object({
@@ -41,6 +52,9 @@ export const getDetailedPageViewsTool = {
     'Get detailed page view metrics: bounce rate, session duration, engagement per path with optional path filter.',
   inputSchema: paramsSchema,
   execute: async (rawParams: unknown) => {
+    // DEBUG: Log raw input parameters
+    // debugLog('Raw params received', rawParams);
+
     const {
       websiteId: websiteIdInput,
       days,
@@ -49,16 +63,78 @@ export const getDetailedPageViewsTool = {
       path,
     } = paramsSchema.parse(rawParams as Params);
 
+    // DEBUG: Log parsed parameters
+    // debugLog('Parsed params', {
+    //   websiteId: websiteIdInput,
+    //   days,
+    //   date_from,
+    //   date_to,
+    //   path,
+    // });
+
     const websiteId = await resolveWebsiteId(websiteIdInput);
-    if (!websiteId) throw new Error('websiteId is required.');
+
+    // DEBUG: Log resolved website ID
+    // debugLog('Resolved websiteId', websiteId);
 
     const today = new Date();
     const endDate = date_to ? parseISO(date_to) : today;
     const startDate = date_from ? parseISO(date_from) : subDays(endDate, Math.max(1, days) - 1);
 
+    // DEBUG: Log date range calculations
+    // debugLog('Date range', {
+    //   startDate: startDate.toISOString(),
+    //   endDate: endDate.toISOString(),
+    //   days,
+    // });
+
     const filters: any = { startDate, endDate };
     if (path) filters.url = path;
-    const rows = await getDetailedPageviewMetrics(websiteId, filters);
+
+    // DEBUG: Log filters being applied
+    // debugLog('Filters applied', filters);
+
+    // DEBUG: Log the query parameters being sent
+    // debugLog('About to call getDetailedPageviewMetrics with:', { websiteId, filters });
+
+    let rows;
+    try {
+      // DEBUG: Log the exact filter structure being sent
+      // debugLog('Filter structure details:', {
+      //   startDate: filters.startDate,
+      //   endDate: filters.endDate,
+      //   startDateType: typeof filters.startDate,
+      //   endDateType: typeof filters.endDate,
+      //   startDateISO: filters.startDate?.toISOString(),
+      //   endDateISO: filters.endDate?.toISOString(),
+      //   path: filters.url,
+      // });
+
+      // DEBUG: Check if we need to restart the server for changes to take effect
+      // debugLog('Note: If you just fixed the SQL query, you may need to restart the server');
+
+      rows = await getDetailedPageviewMetrics(websiteId, filters);
+
+      // DEBUG: Log raw query results
+      // debugLog('Raw rows from query', rows);
+      // debugLog('Number of rows returned', rows ? rows.length : 'null/undefined');
+
+      // if (!rows || rows.length === 0) {
+      //   debugLog('No rows returned - this might indicate no data for the date range or website');
+      //   debugLog(
+      //     'Possible causes: 1) No data in date range, 2) Website has no events, 3) Database query issue',
+      //   );
+      // }
+    } catch (error) {
+      // debugLog('Error calling getDetailedPageviewMetrics', error);
+      debugLog('Error details:', {
+        name: (error as any).name,
+        message: (error as any).message,
+        code: (error as any).code,
+        meta: (error as any).meta,
+      });
+      throw error;
+    }
 
     const formatted = rows.map((r: any) => {
       const totalViews = Number(r.total_views) || 0;
@@ -81,6 +157,9 @@ export const getDetailedPageViewsTool = {
         bounce_rate_percent: Math.round(bounceRate * 100) / 100,
       };
     });
+
+    // DEBUG: Log formatted data
+    // debugLog('Formatted rows', formatted);
 
     const totalPages = formatted.length;
     const totalViews = formatted.reduce((s, it) => s + it.total_views, 0);
@@ -105,7 +184,7 @@ export const getDetailedPageViewsTool = {
       null as any,
     );
 
-    return {
+    const result = {
       days,
       start_date: toDateOnly(startDate),
       end_date: toDateOnly(endDate),
@@ -127,6 +206,11 @@ export const getDetailedPageViewsTool = {
       },
       results: formatted,
     };
+
+    // DEBUG: Log final result
+    // debugLog('Final result', result);
+
+    return result;
   },
 };
 
