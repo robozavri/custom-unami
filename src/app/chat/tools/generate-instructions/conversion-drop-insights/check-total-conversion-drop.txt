@@ -1,0 +1,91 @@
+Tool name: check-total-conversion-drop
+
+Goal:
+This tool compares total conversion performance between two time periods and calculates whether there is a drop in conversion rate or count. The tool works with database-agnostic SQL logic (compatible with both PostgreSQL and ClickHouse) and can be reused independently or as part of a higher-level tool like `conversion-drop-insights`.
+
+🔢 Formula:
+- Conversion rate = conversions / unique visitors
+- Delta = conversion_rate_current - conversion_rate_previous
+- % Change = (delta / conversion_rate_previous) * 100
+
+🧱 Required tables:
+- `event`: stores all tracked events
+- `session`: stores sessions and visitor information
+- `website`: stores website IDs (used for filtering)
+
+⚙️ Expected Input Parameters (JSON):
+```json
+{
+  "websiteId": "string",           // UUID of the website
+  "conversionEvent": "string",     // Name of the event considered a conversion
+  "currentFrom": "YYYY-MM-DD",     // Start of current period
+  "currentTo": "YYYY-MM-DD",       // End of current period
+  "previousFrom": "YYYY-MM-DD",    // Start of comparison period
+  "previousTo": "YYYY-MM-DD"       // End of comparison period
+}
+
+📤 Output Schema:
+
+{
+  "current": {
+    "conversions": number,
+    "uniqueVisitors": number,
+    "conversionRate": number
+  },
+  "previous": {
+    "conversions": number,
+    "uniqueVisitors": number,
+    "conversionRate": number
+  },
+  "change": {
+    "rateDelta": number,
+    "percentChange": number,
+    "direction": "increase" | "decrease" | "no_change"
+  }
+}
+
+
+🧠 SQL Query Example (Database Agnostic Pseudocode):
+
+-- Current period
+SELECT
+  COUNT(DISTINCT e.session_id) AS conversions,
+  COUNT(DISTINCT s.visitor_id) AS unique_visitors
+FROM event e
+JOIN session s ON s.session_id = e.session_id
+WHERE e.website_id = {{websiteId}}
+  AND e.event_name = {{conversionEvent}}
+  AND e.created_at BETWEEN {{currentFrom}} AND {{currentTo}};
+
+-- Previous period
+SELECT
+  COUNT(DISTINCT e.session_id) AS conversions,
+  COUNT(DISTINCT s.visitor_id) AS unique_visitors
+FROM event e
+JOIN session s ON s.session_id = e.session_id
+WHERE e.website_id = {{websiteId}}
+  AND e.event_name = {{conversionEvent}}
+  AND e.created_at BETWEEN {{previousFrom}} AND {{previousTo}};
+
+
+🧠 Tool Logic (Pseudocode):
+
+const currentRate = conversions_now / visitors_now;
+const prevRate = conversions_prev / visitors_prev;
+const delta = currentRate - prevRate;
+const pctChange = (delta / prevRate) * 100;
+
+let direction = "no_change";
+if (pctChange > 0.5) direction = "increase";
+else if (pctChange < -0.5) direction = "decrease";
+
+
+💡 Notes for Cursor:
+
+Codegen should separate SQL logic from business logic
+
+Final tool should return values ready for a chart or explanation
+
+Tool should work with ClickHouse or PostgreSQL — use generic SQL features only
+
+Parameters must be reusable inside higher-level tools

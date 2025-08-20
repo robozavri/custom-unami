@@ -36,7 +36,8 @@ async function relationalQuery(
     { joinSession: true },
   );
 
-  const pathSearch = filters?.url ? `and we.url_path like {{url}}` : '';
+  const pathSearchCTE = filters?.url ? `and we.url_path like {{url}}` : '';
+  const pathSearchMain = filters?.url ? `and website_event.url_path like {{url}}` : '';
 
   return rawQuery(
     `
@@ -48,31 +49,29 @@ async function relationalQuery(
         max(we.created_at) as last_view,
         count(*) as views_in_session
       from website_event we
-      ${cohortQuery}
-      ${joinSession}
       where we.website_id = {{websiteId::uuid}}
         and we.created_at between {{startDate}} and {{endDate}}
         and we.event_type = {{eventType}}
-        ${pathSearch}
+        ${pathSearchCTE}
       group by 1, 2
     )
     select
-      we.url_path as path,
+      website_event.url_path as path,
       count(*) as total_views,
-      count(distinct we.session_id) as unique_visitors,
-      count(distinct we.visit_id) as total_sessions,
+      count(distinct website_event.session_id) as unique_visitors,
+      count(distinct website_event.visit_id) as total_sessions,
       avg(${getTimestampDiffSQL('sa.first_view', 'sa.last_view')}) as avg_session_duration_seconds,
       avg(sa.views_in_session) as avg_views_per_session,
-      count(distinct case when sa.views_in_session = 1 then we.visit_id end) as bounce_sessions
-    from website_event we
-    left join session_agg sa on sa.visit_id = we.visit_id and sa.path = we.url_path
+      count(distinct case when sa.views_in_session = 1 then website_event.visit_id end) as bounce_sessions
+    from website_event
+    left join session_agg sa on sa.visit_id = website_event.visit_id and sa.path = website_event.url_path
     ${cohortQuery}
     ${joinSession}
-    where we.website_id = {{websiteId::uuid}}
-      and we.created_at between {{startDate}} and {{endDate}}
-      and we.event_type = {{eventType}}
-      ${pathSearch}
-    group by we.url_path
+    where website_event.website_id = {{websiteId::uuid}}
+      and website_event.created_at between {{startDate}} and {{endDate}}
+      and website_event.event_type = {{eventType}}
+      ${pathSearchMain}
+    group by website_event.url_path
     order by total_views desc
     `,
     params,
@@ -102,7 +101,6 @@ async function clickhouseQuery(
         max(we.created_at) as last_view,
         count(*) as views_in_session
       from website_event we
-      ${cohortQuery}
       where we.website_id = {websiteId:UUID}
         and we.created_at between {startDate:DateTime64} and {endDate:DateTime64}
         and we.event_type = {eventType:UInt32}
