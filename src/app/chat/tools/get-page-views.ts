@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { DEFAULT_WEBSITE_ID } from '../config';
 import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
 import { formatISO, parseISO, subDays } from 'date-fns';
-import { getPageviewMetrics } from '@/queries';
+import { getPageViewsWithTotals } from '@/queries';
 
 function toDateOnly(date: Date) {
   return formatISO(date, { representation: 'date' });
@@ -53,57 +53,83 @@ export const getPageViewsTool = {
 `.trim(),
   inputSchema: paramsSchema,
   execute: async (rawParams: unknown) => {
-    const {
-      websiteId: websiteIdInput,
-      days,
-      date_from,
-      date_to,
-      path,
-    } = paramsSchema.parse(rawParams as Params);
+    try {
+      const {
+        websiteId: websiteIdInput,
+        days,
+        date_from,
+        date_to,
+        path,
+      } = paramsSchema.parse(rawParams as Params);
 
-    const websiteId = await resolveWebsiteId(websiteIdInput);
-    if (!websiteId) {
-      throw new Error(
-        'websiteId is required. Set an active website with set-active-website or configure DEFAULT_WEBSITE_ID.',
-      );
+      const websiteId = await resolveWebsiteId(websiteIdInput);
+      if (!websiteId) {
+        throw new Error(
+          'websiteId is required. Set an active website with set-active-website or configure DEFAULT_WEBSITE_ID.',
+        );
+      }
+
+      // Determine date range
+      const today = new Date();
+      const endDate = date_to ? parseISO(date_to) : today;
+      const startDate = date_from ? parseISO(date_from) : subDays(endDate, Math.max(1, days) - 1);
+
+      // Use the new database-agnostic function to get both total views and unique visitors
+      const filters: any = { startDate, endDate };
+      if (path) filters.url = path; // substring match using LIKE operator
+
+      const metrics = await getPageViewsWithTotals(websiteId, filters);
+      const formatted = metrics.map(({ path: pagePath, total_views, unique_visitors }) => ({
+        path: pagePath || 'Unknown',
+        total_views: Number(total_views) || 0,
+        unique_visitors: Number(unique_visitors) || 0,
+        avg_views_per_visitor:
+          Number(unique_visitors) > 0
+            ? Math.round((Number(total_views) / Number(unique_visitors)) * 100) / 100
+            : 0,
+      }));
+
+      const totalPages = formatted.length;
+      const totalViews = formatted.reduce((sum, it) => sum + it.total_views, 0);
+      const totalVisitors = formatted.reduce((sum, it) => sum + it.unique_visitors, 0);
+
+      const topPage = formatted[0] || null;
+      const leastViewedPage = formatted.length > 0 ? formatted[formatted.length - 1] : null;
+
+      return {
+        days,
+        start_date: toDateOnly(startDate),
+        end_date: toDateOnly(endDate),
+        filter: path || 'all_pages',
+        summary: {
+          total_pages: totalPages,
+          total_views: totalViews,
+          total_unique_visitors: totalVisitors,
+          top_page: topPage
+            ? {
+                path: topPage.path,
+                views: topPage.total_views,
+                visitors: topPage.unique_visitors,
+              }
+            : null,
+          least_viewed_page: leastViewedPage
+            ? {
+                path: leastViewedPage.path,
+                views: leastViewedPage.total_views,
+                visitors: leastViewedPage.unique_visitors,
+              }
+            : null,
+        },
+        results: formatted,
+      };
+    } catch (error) {
+      // Return error information that will show up in the response
+      return {
+        error: true,
+        error_message: error instanceof Error ? error.message : 'Unknown error occurred',
+        error_stack: error instanceof Error ? error.stack : undefined,
+      };
     }
-
-    // Determine date range
-    const today = new Date();
-    const endDate = date_to ? parseISO(date_to) : today;
-    const startDate = date_from ? parseISO(date_from) : subDays(endDate, Math.max(1, days) - 1);
-
-    // Database-agnostic: use built-in query wrapper (returns unique visitors per path)
-    const filters: any = { startDate, endDate };
-    if (path) filters.url = path; // equality match; for contains we can extend later
-
-    const metrics = await getPageviewMetrics(websiteId, 'url', filters, 500, 0);
-    const formatted = metrics.map(({ x, y }) => ({
-      path: x || 'Unknown',
-      unique_visitors: Number(y) || 0,
-    }));
-
-    const totalPages = formatted.length;
-    const totalVisitors = formatted.reduce((sum, it) => sum + it.unique_visitors, 0);
-
-    const topPage = formatted[0] || null;
-    const leastViewedPage = formatted.length > 0 ? formatted[formatted.length - 1] : null;
-
-    return {
-      days,
-      start_date: toDateOnly(startDate),
-      end_date: toDateOnly(endDate),
-      filter: path || 'all_pages',
-      summary: {
-        total_pages: totalPages,
-        total_unique_visitors: totalVisitors,
-        top_page: topPage ? { path: topPage.path, visitors: topPage.unique_visitors } : null,
-        least_viewed_page: leastViewedPage
-          ? { path: leastViewedPage.path, visitors: leastViewedPage.unique_visitors }
-          : null,
-      },
-      results: formatted,
-    };
   },
 };
 
