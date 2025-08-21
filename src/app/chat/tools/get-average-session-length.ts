@@ -1,8 +1,6 @@
 import { z } from 'zod';
-import { DEFAULT_WEBSITE_ID } from '../config';
-import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
-import prisma from '@/lib/prisma';
 import { getAverageSessionLengthBuckets } from '@/queries';
+import { getWebsiteId } from '../state';
 
 const inputSchema = z.object({
   websiteId: z.string().optional(),
@@ -36,21 +34,8 @@ function addDays(d: Date, n: number): Date {
   return nd;
 }
 
-async function resolveWebsiteId(websiteIdInput?: string): Promise<string | null> {
-  if (websiteIdInput) return websiteIdInput;
-  const active = getActiveWebsiteId();
-  if (active) return active;
-  if (DEFAULT_WEBSITE_ID) return DEFAULT_WEBSITE_ID;
-
-  const first = await prisma.client.website.findFirst({
-    where: { deletedAt: null },
-    select: { id: true },
-  });
-  if (first?.id) {
-    setActiveWebsiteId(first.id);
-    return first.id;
-  }
-  return null;
+async function resolveWebsiteId(websiteIdInput?: string): Promise<string> {
+  return getWebsiteId(websiteIdInput);
 }
 
 export const getAverageSessionLengthTool = {
@@ -61,7 +46,7 @@ export const getAverageSessionLengthTool = {
   execute: async (raw: unknown): Promise<{ data: AvgSessionRow[] }> => {
     const input = inputSchema.parse(raw);
     const websiteId = await resolveWebsiteId(input.websiteId);
-    if (!websiteId) throw new Error('websiteId is required.');
+    // websiteId is guaranteed to be a valid string from getWebsiteId
 
     const rows = await getAverageSessionLengthBuckets({
       websiteId,

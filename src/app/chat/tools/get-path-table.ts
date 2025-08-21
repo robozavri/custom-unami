@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import { getPathTable } from '@/queries';
-import prisma from '@/lib/prisma';
-import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
-import { DEFAULT_WEBSITE_ID } from '../config';
+import { getWebsiteId } from '../state';
 
 const periodEnum = z.enum([
   'today',
@@ -27,20 +25,8 @@ const paramsSchema = z.object({
 
 type Params = z.infer<typeof paramsSchema>;
 
-async function resolveWebsiteId(websiteIdInput?: string): Promise<string | null> {
-  if (websiteIdInput) return websiteIdInput;
-  const active = getActiveWebsiteId();
-  if (active) return active;
-  if (DEFAULT_WEBSITE_ID) return DEFAULT_WEBSITE_ID;
-  const first = await prisma.client.website.findFirst({
-    where: { deletedAt: null },
-    select: { id: true },
-  });
-  if (first?.id) {
-    setActiveWebsiteId(first.id);
-    return first.id;
-  }
-  return null;
+async function resolveWebsiteId(websiteIdInput?: string): Promise<string> {
+  return getWebsiteId(websiteIdInput);
 }
 
 function calculateDateRange(period: string, customDays?: number) {

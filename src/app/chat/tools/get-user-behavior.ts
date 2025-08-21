@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { parseISO, subDays, formatISO } from 'date-fns';
 import { getUserBehaviorMetrics } from '@/queries';
-import { resolveWebsiteId } from './utils/website-resolver';
+import { getWebsiteId } from '../state';
 
 const periodEnum = z.enum([
   'last_7_days',
@@ -80,9 +80,9 @@ export const getUserBehaviorTool = {
     } = paramsSchema.parse(rawParams as Params);
 
     // eslint-disable-next-line no-console
-    console.log('get-user-behavior: About to call resolveWebsiteId with:', websiteIdInput);
+    console.log('get-user-behavior: About to call getWebsiteId with:', websiteIdInput);
 
-    const websiteId = await resolveWebsiteId(websiteIdInput);
+    const websiteId = await getWebsiteId(websiteIdInput);
 
     // Add debug logging
     // eslint-disable-next-line no-console
@@ -91,8 +91,8 @@ export const getUserBehaviorTool = {
       resolved: websiteId,
       inputType: typeof websiteIdInput,
       resolvedType: typeof websiteId,
-      functionName: resolveWebsiteId.name,
-      functionSource: resolveWebsiteId.toString().substring(0, 100),
+      functionName: getWebsiteId.name,
+      functionSource: getWebsiteId.toString().substring(0, 100),
     });
 
     if (!websiteId) throw new Error('websiteId is required.');

@@ -2,9 +2,7 @@ import { z } from 'zod';
 import { formatISO, parseISO, subDays } from 'date-fns';
 import { getRetention } from '@/queries';
 import { getRetentionCohorts } from '@/queries/sql/anomaly-insights/getRetentionCohorts';
-import prisma from '@/lib/prisma';
-import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
-import { DEFAULT_WEBSITE_ID } from '../config';
+import { getWebsiteId } from '../state';
 
 const periodEnum = z.enum(['day', 'week', 'month']);
 
@@ -19,20 +17,8 @@ const paramsSchema = z.object({
 
 type Params = z.infer<typeof paramsSchema>;
 
-async function resolveWebsiteId(websiteIdInput?: string): Promise<string | null> {
-  if (websiteIdInput) return websiteIdInput;
-  const active = getActiveWebsiteId();
-  if (active) return active;
-  if (DEFAULT_WEBSITE_ID) return DEFAULT_WEBSITE_ID;
-  const first = await prisma.client.website.findFirst({
-    where: { deletedAt: null },
-    select: { id: true },
-  });
-  if (first?.id) {
-    setActiveWebsiteId(first.id);
-    return first.id;
-  }
-  return null;
+async function resolveWebsiteId(websiteIdInput?: string): Promise<string> {
+  return getWebsiteId(websiteIdInput);
 }
 
 function computeRange(start?: string, end?: string) {
@@ -68,7 +54,7 @@ export const getRetentionTool = {
     } = paramsSchema.parse(rawParams as Params);
 
     const websiteId = await resolveWebsiteId(websiteIdInput);
-    if (!websiteId) throw new Error('websiteId is required.');
+    // websiteId is guaranteed to be a valid string from getWebsiteId
 
     const { startDate, endDate } = computeRange(date_from, date_to);
 

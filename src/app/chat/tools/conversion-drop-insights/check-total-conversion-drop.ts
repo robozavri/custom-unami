@@ -1,9 +1,6 @@
 import { z } from 'zod';
-// TODO: Fix import path for state utilities
-// import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
-import prisma from '@/lib/prisma';
 import { getConversionDropData } from '@/queries/sql/conversion-drop-insights/check-total-conversion-drop';
-import { getActiveWebsiteId, setActiveWebsiteId } from '../../state';
+import { getWebsiteId } from '../../state';
 
 const inputSchema = z.object({
   websiteId: z.string().optional(),
@@ -32,20 +29,8 @@ export interface ConversionDropResult {
   };
 }
 
-async function resolveWebsiteId(websiteIdInput?: string): Promise<string | null> {
-  if (websiteIdInput) return websiteIdInput;
-  const active = getActiveWebsiteId();
-  if (active) return active;
-
-  const first = await prisma.client.website.findFirst({
-    where: { deletedAt: null },
-    select: { id: true },
-  });
-  if (first?.id) {
-    setActiveWebsiteId(first.id);
-    return first.id;
-  }
-  return null;
+async function resolveWebsiteId(websiteIdInput?: string): Promise<string> {
+  return getWebsiteId(websiteIdInput);
 }
 
 export const checkTotalConversionDropTool = {
@@ -56,10 +41,7 @@ export const checkTotalConversionDropTool = {
   execute: async (raw: unknown): Promise<{ data: ConversionDropResult }> => {
     const input = inputSchema.parse(raw);
     const websiteId = await resolveWebsiteId(input.websiteId);
-
-    if (!websiteId) {
-      throw new Error('No website ID provided and no active website found');
-    }
+    // websiteId is guaranteed to be a valid string from getWebsiteId
 
     // Validate date formats
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;

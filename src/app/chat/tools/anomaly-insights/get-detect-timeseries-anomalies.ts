@@ -1,9 +1,10 @@
 // import debug from 'debug';
 import { z } from 'zod';
-import { runQuery, getDatabaseType, CLICKHOUSE, PRISMA, POSTGRESQL } from '@/lib/db';
+import { runQuery, getDatabaseType, CLICKHOUSE, PRISMA } from '@/lib/db';
 import prisma from '@/lib/prisma';
 import { getActiveWebsiteId, setActiveWebsiteId } from '../../state';
 import { DEFAULT_WEBSITE_ID } from '../../config';
+import { getTimeseriesAnomaliesQueries } from '@/queries/sql/anomaly-insights/getTimeseriesAnomalies';
 
 // const log = debug('umami:anomaly:timeseries');
 
@@ -28,33 +29,6 @@ const SENSITIVITY_THRESHOLDS = {
   medium: 2.5,
   high: 2.0,
 };
-
-// Database agnostic date formatting functions
-function getDateTruncSQL(field: string, interval: string, dbType: string): string {
-  switch (dbType) {
-    case CLICKHOUSE:
-      if (interval === 'hour') return `toStartOfHour(${field})`;
-      if (interval === 'week') return `toStartOfWeek(${field})`;
-      return `toDate(${field})`;
-    case PRISMA:
-    default:
-      if (interval === 'hour') return `date_trunc('hour', ${field})`;
-      if (interval === 'week') return `date_trunc('week', ${field})`;
-      return `date_trunc('day', ${field})`;
-  }
-}
-
-function getDateRangeSQL(dbType: string): string {
-  switch (dbType) {
-    case CLICKHOUSE:
-      return `created_at >= parseDateTimeBestEffort({date_from:String}) AND created_at < parseDateTimeBestEffort({date_to:String}) + INTERVAL 1 DAY`;
-    case POSTGRESQL:
-      return `created_at >= $2::timestamptz AND created_at < $3::timestamptz + interval '1 day'`;
-    default:
-      // MySQL or others handled by Prisma
-      return `created_at >= $2 AND created_at < $3 + interval 1 day`;
-  }
-}
 
 // Calculate Median Absolute Deviation (MAD)
 function calculateMAD(values: number[]): number {
@@ -181,83 +155,8 @@ export const getDetectTimeseriesAnomaliesTool = {
         const { createClient } = await import('@clickhouse/client');
         const client = createClient({ url: process.env.CLICKHOUSE_URL! });
 
-        let query: string;
+        const query = getTimeseriesAnomaliesQueries[CLICKHOUSE][params.metric](params.interval);
         const qparams = { websiteId, date_from: params.date_from, date_to: params.date_to };
-
-        switch (params.metric) {
-          case 'visits':
-            query = `
-              WITH
-                ${getDateTruncSQL('created_at', params.interval, dbType)} AS d
-              SELECT
-                d AS bucket,
-                uniq(visit_id) AS value
-              FROM website_event
-              WHERE website_id = {websiteId:UUID}
-                AND ${getDateRangeSQL(dbType)}
-              GROUP BY bucket
-              ORDER BY bucket`;
-            break;
-
-          case 'pageviews':
-            query = `
-              WITH
-                ${getDateTruncSQL('created_at', params.interval, dbType)} AS d
-              SELECT
-                d AS bucket,
-                countIf(event_type = 1) AS value
-              FROM website_event
-              WHERE website_id = {websiteId:UUID}
-                AND ${getDateRangeSQL(dbType)}
-              GROUP BY bucket
-              ORDER BY bucket`;
-            break;
-
-          case 'bounce_rate':
-            query = `
-              WITH
-                ${getDateTruncSQL('created_at', params.interval, dbType)} AS d
-              SELECT
-                d AS bucket,
-                uniq(visit_id) AS visits,
-                countIf(views_per_visit = 1) AS bounces,
-                bounces / nullIf(visits, 0) AS value
-              FROM (
-                SELECT
-                  visit_id, d,
-                  sumIf(1, event_type = 1) AS views_per_visit
-                FROM website_event
-                WHERE website_id = {websiteId:UUID}
-                  AND ${getDateRangeSQL(dbType)}
-                GROUP BY visit_id, d
-              )
-              GROUP BY bucket
-              ORDER BY bucket`;
-            break;
-
-          case 'visit_duration':
-            query = `
-              WITH
-                ${getDateTruncSQL('created_at', params.interval, dbType)} AS d
-              SELECT
-                d AS bucket,
-                avg(duration_seconds) AS value
-              FROM (
-                SELECT
-                  visit_id, d,
-                  max(created_at) - min(created_at) AS duration_seconds
-                FROM website_event
-                WHERE website_id = {websiteId:UUID}
-                  AND ${getDateRangeSQL(dbType)}
-                GROUP BY visit_id, d
-              )
-              GROUP BY bucket
-              ORDER BY bucket`;
-            break;
-
-          default:
-            throw new Error(`Unsupported metric: ${params.metric}`);
-        }
 
         // log('[clickhouse][exec]', { metric: params.metric, interval: params.interval, qparams, query });
         // console.log('[anomaly][timeseries][clickhouse][exec]', { metric: params.metric, interval: params.interval, qparams, query });
@@ -273,86 +172,7 @@ export const getDetectTimeseriesAnomaliesTool = {
       },
 
       [PRISMA]: async () => {
-        const dateTrunc = getDateTruncSQL('created_at', params.interval, dbType);
-        const dateRange = getDateRangeSQL(dbType);
-        const websiteIdParam = dbType === POSTGRESQL ? '$1::uuid' : '$1';
-
-        let query: string;
-
-        switch (params.metric) {
-          case 'visits':
-            query = `
-              SELECT 
-                ${dateTrunc} AS bucket,
-                COUNT(DISTINCT visit_id) AS value
-              FROM website_event 
-              WHERE website_id = ${websiteIdParam} 
-                AND ${dateRange}
-              GROUP BY ${dateTrunc}
-              ORDER BY ${dateTrunc}`;
-            break;
-
-          case 'pageviews':
-            query = `
-              SELECT 
-                ${dateTrunc} AS bucket,
-                COUNT(CASE WHEN event_type = 1 THEN 1 END) AS value
-              FROM website_event 
-              WHERE website_id = ${websiteIdParam} 
-                AND ${dateRange}
-              GROUP BY ${dateTrunc}
-              ORDER BY ${dateTrunc}`;
-            break;
-
-          case 'bounce_rate':
-            query = `
-              WITH visit_stats AS (
-                SELECT 
-                  ${dateTrunc} AS bucket,
-                  visit_id,
-                  COUNT(CASE WHEN event_type = 1 THEN 1 END) AS views_per_visit
-                FROM website_event 
-                WHERE website_id = ${websiteIdParam} 
-                  AND ${dateRange}
-                GROUP BY ${dateTrunc}, visit_id
-              )
-              SELECT 
-                bucket,
-                COUNT(DISTINCT visit_id) AS visits,
-                COUNT(CASE WHEN views_per_visit = 1 THEN 1 END) AS bounces,
-                CASE 
-                  WHEN COUNT(DISTINCT visit_id) > 0 
-                  THEN COUNT(CASE WHEN views_per_visit = 1 THEN 1 END)::float / COUNT(DISTINCT visit_id)
-                  ELSE 0 
-                END AS value
-              FROM visit_stats
-              GROUP BY bucket
-              ORDER BY bucket`;
-            break;
-
-          case 'visit_duration':
-            query = `
-              WITH visit_durations AS (
-                SELECT 
-                  ${dateTrunc} AS bucket,
-                  visit_id,
-                  EXTRACT(EPOCH FROM (MAX(created_at) - MIN(created_at))) AS duration_seconds
-                FROM website_event 
-                WHERE website_id = ${websiteIdParam} 
-                  AND ${dateRange}
-                GROUP BY ${dateTrunc}, visit_id
-              )
-              SELECT 
-                bucket,
-                AVG(duration_seconds) AS value
-              FROM visit_durations
-              GROUP BY bucket
-              ORDER BY bucket`;
-            break;
-
-          default:
-            throw new Error(`Unsupported metric: ${params.metric}`);
-        }
+        const query = getTimeseriesAnomaliesQueries[PRISMA][params.metric](params.interval, dbType);
 
         // log('[prisma][exec]', { metric: params.metric, interval: params.interval, websiteId, date_from: params.date_from, date_to: params.date_to, query });
         // console.log('[anomaly][timeseries][prisma][exec]', { metric: params.metric, interval: params.interval, websiteId, date_from: params.date_from, date_to: params.date_to, query });

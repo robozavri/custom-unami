@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import { formatISO, parseISO, subDays } from 'date-fns';
 import { getDetailedPageviewMetrics } from '@/queries';
-import prisma from '@/lib/prisma';
-import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
-import { DEFAULT_WEBSITE_ID } from '../config';
+import { getWebsiteId } from '../state';
 
 // Debug function that can be toggled
 const DEBUG = false; // Force enable debug for troubleshooting
@@ -19,21 +17,7 @@ function toDateOnly(date: Date) {
 }
 
 async function resolveWebsiteId(websiteIdInput?: string): Promise<string> {
-  if (websiteIdInput) return websiteIdInput;
-  const active = getActiveWebsiteId();
-  if (active) return active;
-  if (DEFAULT_WEBSITE_ID) return DEFAULT_WEBSITE_ID;
-  const first = await prisma.client.website.findFirst({
-    where: { deletedAt: null },
-    select: { id: true },
-  });
-  if (first?.id) {
-    setActiveWebsiteId(first.id);
-    return first.id;
-  }
-  throw new Error(
-    'No website ID found. Please provide a websiteId or ensure there are websites in the database.',
-  );
+  return getWebsiteId(websiteIdInput);
 }
 
 const paramsSchema = z.object({

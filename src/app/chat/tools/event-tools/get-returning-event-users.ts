@@ -1,29 +1,14 @@
 import { z } from 'zod';
-import prisma from '@/lib/prisma';
-import { DEFAULT_WEBSITE_ID } from '../../config';
-import { getActiveWebsiteId, setActiveWebsiteId } from '../../state';
 import { formatISO, parseISO, subDays } from 'date-fns';
 import { getReturningEventUsers } from '@/queries/sql/events/getReturningEventUsers';
+import { getWebsiteId } from '../../state';
 
 function toDateOnly(date: Date) {
   return formatISO(date, { representation: 'date' });
 }
 
-async function resolveWebsiteId(websiteIdInput?: string): Promise<string | null> {
-  if (websiteIdInput) return websiteIdInput;
-  const active = getActiveWebsiteId();
-  if (active) return active;
-  if (DEFAULT_WEBSITE_ID) return DEFAULT_WEBSITE_ID;
-
-  const first = await prisma.client.website.findFirst({
-    where: { deletedAt: null },
-    select: { id: true },
-  });
-  if (first?.id) {
-    setActiveWebsiteId(first.id);
-    return first.id;
-  }
-  return null;
+async function resolveWebsiteId(websiteIdInput?: string): Promise<string> {
+  return getWebsiteId(websiteIdInput);
 }
 
 const paramsSchema = z.object({
@@ -76,11 +61,7 @@ export const getReturningEventUsersTool = {
     // });
 
     const websiteId = await resolveWebsiteId(websiteIdInput);
-    if (!websiteId) {
-      throw new Error(
-        'websiteId is required. Set an active website with set-active-website or configure DEFAULT_WEBSITE_ID.',
-      );
-    }
+    // websiteId is guaranteed to be a valid string from getWebsiteId
 
     // console.log('[get-returning-event-users] Resolved websiteId:', websiteId);
 

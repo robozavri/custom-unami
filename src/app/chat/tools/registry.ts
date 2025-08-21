@@ -5,6 +5,7 @@ import { tool } from 'ai';
 // Import tool objects (server-side executors)
 import { getActiveUsersTool } from './get-active-users';
 import { setActiveWebsiteTool } from './set-active-website';
+import { getWebsitesTool } from './get-websites';
 import { getPageViewsTool } from './get-page-views';
 import { getDetailedPageViewsTool } from './get-detailed-page-views';
 import { getUserBehaviorTool } from './get-user-behavior';
@@ -13,6 +14,7 @@ import { getWebStatisticTool } from './get-web-statistic';
 import { getWebAnalyticsBreakdownTool } from './get-web-analytics-breakdown';
 import { getPathTableTool } from './get-path-table';
 import { getCountryTableTool } from './get-country-table';
+import { anomalyInsightsTool } from './anomaly-insights';
 import { getDetectTimeseriesAnomaliesTool } from './anomaly-insights';
 import { getDetectPathDropoffsTool } from './anomaly-insights';
 import { getDetectSegmentShiftsTool } from './anomaly-insights';
@@ -41,10 +43,48 @@ const log = debug('umami:chat:tools');
 // Central builder for the chat tools map used by the API route and any other consumers
 export function buildToolsMap(): Record<string, any> {
   return {
+    'anomaly-insights': (tool as any)({
+      description: anomalyInsightsTool.description,
+      inputSchema: anomalyInsightsTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => {
+        log('invoke anomaly-insights', params);
+        // eslint-disable-next-line no-console
+        console.log('[tools][invoke] anomaly-insights', params);
+        try {
+          const result = await anomalyInsightsTool.execute(params as any);
+          log('result anomaly-insights', {
+            type: (result as any)?.type,
+            hasData: result && (result as any).data ? Object.keys((result as any).data).length : 0,
+            findings: Array.isArray(((result as any).data as any)?.findings)
+              ? ((result as any).data as any).findings.length
+              : null,
+          });
+          // eslint-disable-next-line no-console
+          console.log('[tools][result] anomaly-insights', {
+            type: (result as any)?.type,
+            hasData: result && (result as any).data ? Object.keys((result as any).data).length : 0,
+            findings: Array.isArray(((result as any).data as any)?.findings)
+              ? ((result as any).data as any).findings.length
+              : null,
+          });
+          return result;
+        } catch (error) {
+          log('error anomaly-insights', error);
+          // eslint-disable-next-line no-console
+          console.error('[tools][error] anomaly-insights', error);
+          throw error;
+        }
+      },
+    }),
     'get-active-users': (tool as any)({
       description: getActiveUsersTool.description,
       inputSchema: getActiveUsersTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getActiveUsersTool.execute(params),
+    }),
+    'get-websites': (tool as any)({
+      description: getWebsitesTool.description,
+      inputSchema: getWebsitesTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getWebsitesTool.execute(params),
     }),
     'get-page-views': (tool as any)({
       description: getPageViewsTool.description,

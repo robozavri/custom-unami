@@ -1,5 +1,4 @@
-import prisma from '@/lib/prisma';
-import { getActiveWebsiteId, setActiveWebsiteId } from '../../state';
+import { getActiveWebsiteId } from '../../state';
 import { DEFAULT_WEBSITE_ID } from '../../config';
 
 /**
@@ -48,35 +47,8 @@ export async function resolveWebsiteId(websiteIdInput?: string): Promise<string 
     return active;
   }
 
-  // 3. Only use DEFAULT_WEBSITE_ID if it's actually a valid UUID (non-empty)
-  if (DEFAULT_WEBSITE_ID !== '') {
-    // eslint-disable-next-line no-console
-    console.log('resolveWebsiteId: Returning DEFAULT_WEBSITE_ID:', DEFAULT_WEBSITE_ID);
-    return DEFAULT_WEBSITE_ID;
-  }
-
+  // 3. Use DEFAULT_WEBSITE_ID (it's always a valid UUID from config)
   // eslint-disable-next-line no-console
-  console.log('resolveWebsiteId: No valid websiteId found, falling back to database lookup');
-
-  // 4. Fallback to database lookup - find first available website
-  try {
-    const first = await prisma.client.website.findFirst({
-      where: { deletedAt: null },
-      select: { id: true },
-    });
-
-    if (first?.id) {
-      setActiveWebsiteId(first.id);
-      // eslint-disable-next-line no-console
-      console.log('resolveWebsiteId: Found website from database:', first.id);
-      return first.id;
-    }
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('resolveWebsiteId: Database lookup failed:', error);
-  }
-
-  // eslint-disable-next-line no-console
-  console.log('resolveWebsiteId: No website found, returning null');
-  return null;
+  console.log('resolveWebsiteId: Returning DEFAULT_WEBSITE_ID:', DEFAULT_WEBSITE_ID);
+  return DEFAULT_WEBSITE_ID;
 }

@@ -1,9 +1,7 @@
 import { z } from 'zod';
 // import debug from 'debug';
-import { DEFAULT_WEBSITE_ID } from '../config';
-import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
-import prisma from '@/lib/prisma';
 import { getUserEventsForChurn } from '@/queries';
+import { getWebsiteId } from '../state';
 
 type Granularity = 'day' | 'week' | 'month';
 
@@ -29,21 +27,8 @@ export interface ChurnRow {
   churn_rate: number; // 0..100
 }
 
-async function resolveWebsiteId(websiteIdInput?: string): Promise<string | null> {
-  if (websiteIdInput) return websiteIdInput;
-  const active = getActiveWebsiteId();
-  if (active) return active;
-  if (DEFAULT_WEBSITE_ID) return DEFAULT_WEBSITE_ID;
-
-  const first = await prisma.client.website.findFirst({
-    where: { deletedAt: null },
-    select: { id: true },
-  });
-  if (first?.id) {
-    setActiveWebsiteId(first.id);
-    return first.id;
-  }
-  return null;
+async function resolveWebsiteId(websiteIdInput?: string): Promise<string> {
+  return getWebsiteId(websiteIdInput);
 }
 
 function toDateOnly(d: Date | string): string {
@@ -120,7 +105,7 @@ export const getChurnRateTool = {
   execute: async (raw: unknown): Promise<{ data: ChurnRow[]; meta: any }> => {
     const input = inputSchema.parse(raw);
     const websiteId = await resolveWebsiteId(input.websiteId);
-    if (!websiteId) throw new Error('websiteId is required.');
+    // websiteId is guaranteed to be a valid string from getWebsiteId
 
     if (input.churn_model === 'cancellation') {
       throw new Error(

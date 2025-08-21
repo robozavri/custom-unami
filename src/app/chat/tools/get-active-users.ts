@@ -9,9 +9,7 @@ import {
   startOfYear,
   addMonths,
 } from 'date-fns';
-import { DEFAULT_WEBSITE_ID } from '../config';
-import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
-import prisma from '@/lib/prisma';
+import { getWebsiteId } from '../state';
 import debug from 'debug';
 
 const log = debug('umami:getActiveUsers');
@@ -26,21 +24,8 @@ const paramsSchema = z.object({
 
 type Params = z.infer<typeof paramsSchema>;
 
-async function resolveWebsiteId(websiteIdInput?: string): Promise<string | null> {
-  if (websiteIdInput) return websiteIdInput;
-  const active = getActiveWebsiteId();
-  if (active) return active;
-  if (DEFAULT_WEBSITE_ID) return DEFAULT_WEBSITE_ID;
-
-  const first = await prisma.client.website.findFirst({
-    where: { deletedAt: null },
-    select: { id: true },
-  });
-  if (first?.id) {
-    setActiveWebsiteId(first.id);
-    return first.id;
-  }
-  return null;
+async function resolveWebsiteId(websiteIdInput?: string): Promise<string> {
+  return getWebsiteId(websiteIdInput);
 }
 
 function toDateOnly(date: Date) {
@@ -107,11 +92,7 @@ export const getActiveUsersTool = {
     } = paramsSchema.parse(rawParams as Params);
     const resolvedWebsiteId = await resolveWebsiteId(websiteIdInput);
 
-    if (!resolvedWebsiteId) {
-      throw new Error(
-        'websiteId is required. Set an active website with set-active-website or configure DEFAULT_WEBSITE_ID.',
-      );
-    }
+    // resolvedWebsiteId is guaranteed to be a valid string from getWebsiteId
     const { startDate, endDate } = getRange(interval, date_from, date_to);
     // eslint-disable-next-line no-console
     console.log('[get-active-users] resolved args:', {
