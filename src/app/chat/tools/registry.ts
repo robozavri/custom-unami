@@ -217,6 +217,8 @@ export function buildToolsMap(): Record<string, any> {
               ? (result as any).findings.length
               : null,
           });
+          // eslint-disable-next-line no-console
+          console.log('[tools][result] get-detect-segment-shifts', result);
           return result;
         } catch (error) {
           log('error get-detect-segment-shifts', error);

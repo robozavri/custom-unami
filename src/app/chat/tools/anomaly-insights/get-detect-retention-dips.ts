@@ -15,7 +15,8 @@ const inputSchema = z.object({
   min_cohort_size: z.number().min(1).default(50),
   min_effect_size: z.number().min(0).max(1).default(0.15),
   sensitivity: z.enum(['low', 'medium', 'high']).default('medium'),
-  return_matrix: z.boolean().default(true),
+  // Default to false to avoid large payloads unless explicitly requested
+  return_matrix: z.boolean().default(false),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -27,23 +28,31 @@ export type Sensitivity = 'low' | 'medium' | 'high';
 export interface RetentionDipFinding {
   type: 'retention_dip';
   cohort_start: string;
-  k: number;
+  period_number: number; // 1-based offset in selected period granularity
   metric: 'retention';
-  value: number;
-  expected: number;
-  effect_size: number;
-  z?: number;
-  support: number;
-  explanation: string;
-  recommended_checks: string[];
+  value: number; // actual retention rate (0..1)
+  expected: number; // baseline retention rate (0..1)
+  effect_size: number; // absolute gap vs baseline (0..1)
+  z_score?: number; // standardized distance vs median baseline
+  support: number; // cohort size
+  // Compact, structured fields for easier consumption
+  severity: 'low' | 'medium' | 'high';
+  drop_percentage: number; // effect size in percentage points
+  actual_percentage: number; // value in percentage points
+  baseline_percentage: number; // expected in percentage points
 }
 
 export interface RetentionDipOutput {
   findings: RetentionDipFinding[];
   summary: string;
   extras?: {
-    matrix?: Array<{ cohort_start: string; k: number; rate: number; cohort_size: number }>;
-    baselines?: Array<{ k: number; baseline: number }>;
+    cohort_count: number;
+    total_users_analyzed: number;
+    baseline_summary: Array<{
+      period_number: number;
+      median_retention: number;
+      normal_range: [number, number];
+    }>;
   };
 }
 
@@ -156,24 +165,24 @@ async function detectRetentionDips(input: Input): Promise<RetentionDipOutput> {
       const eff = Math.max(0, baseline - rate);
       const z = sigma > 0 ? (rate - baseline) / sigma : 0;
       if (size >= minSize && eff >= minEff && Math.abs(z) >= zThresh) {
+        const absZ = Math.abs(z);
+        const severity: 'low' | 'medium' | 'high' =
+          eff >= 0.2 || absZ >= 3 ? 'high' : eff >= 0.1 || absZ >= 2.5 ? 'medium' : 'low';
+
         findings.push({
           type: 'retention_dip',
           cohort_start: cohort,
-          k,
+          period_number: k,
           metric: 'retention',
           value: rate,
           expected: baseline,
           effect_size: eff,
-          z,
+          z_score: z,
           support: size,
-          explanation: `Cohort ${cohort} has k=${k} retention ${(rate * 100).toFixed(
-            0,
-          )}% vs baseline ${(baseline * 100).toFixed(0)}%`,
-          recommended_checks: [
-            'review onboarding between k-1 and k',
-            'check feature launches or pricing changes in that window',
-            'analyze email/push re-engagement for this cohort',
-          ],
+          severity,
+          drop_percentage: eff * 100,
+          actual_percentage: rate * 100,
+          baseline_percentage: baseline * 100,
         });
       }
     }
@@ -181,42 +190,42 @@ async function detectRetentionDips(input: Input): Promise<RetentionDipOutput> {
 
   // Rank by severity
   findings.sort((a, b) => {
-    const sa = Math.max(Math.abs(a.z ?? 0), a.effect_size);
-    const sb = Math.max(Math.abs(b.z ?? 0), b.effect_size);
+    const sa = Math.max(Math.abs(a.z_score ?? 0), a.effect_size);
+    const sb = Math.max(Math.abs(b.z_score ?? 0), b.effect_size);
     if (sb !== sa) return sb - sa;
     // tie-break by absolute gap
     return b.expected - b.value - (a.expected - a.value);
   });
 
   const summary = findings.length
-    ? `Detected ${findings.length} retention dip(s). Top: cohort ${findings[0].cohort_start} at k=${
-        findings[0].k
-      } (${(findings[0].value * 100).toFixed(0)}% vs ${(findings[0].expected * 100).toFixed(0)}%).`
+    ? `Detected ${findings.length} retention dip(s). Top: cohort ${
+        findings[0].cohort_start
+      } at period ${findings[0].period_number} (${findings[0].actual_percentage.toFixed(
+        0,
+      )}% vs ${findings[0].baseline_percentage.toFixed(0)}%).`
     : 'No significant retention dips detected for the selected period.';
 
-  const extras =
-    input.return_matrix !== false
-      ? {
-          matrix: Array.from(byCohort.entries()).flatMap(([cohort, data]) => {
-            const rows: Array<{
-              cohort_start: string;
-              k: number;
-              rate: number;
-              cohort_size: number;
-            }> = [];
-            for (let k = 1; k <= max_k; k++) {
-              const active = data.kAct.get(k) ?? 0;
-              const rate = data.size > 0 ? active / data.size : 0;
-              rows.push({ cohort_start: cohort, k, rate, cohort_size: data.size });
-            }
-            return rows;
-          }),
-          baselines: Array.from(baselineByK.entries()).map(([k, v]) => ({
-            k,
-            baseline: v.baseline,
-          })),
-        }
-      : undefined;
+  // Build lightweight extras summary instead of returning a large matrix
+  const analyzedCohorts: Array<{ cohort: string; size: number }> = Array.from(byCohort.entries())
+    .filter(([, data]) => data.size >= minSize && data.size > 0)
+    .map(([cohort, data]) => ({ cohort, size: data.size }));
+
+  const cohort_count = analyzedCohorts.length;
+  const total_users_analyzed = analyzedCohorts.reduce((sum, x) => sum + x.size, 0);
+
+  const baseline_summary = Array.from(baselineByK.entries())
+    .map(([k, v]) => {
+      const min = Math.max(0, v.baseline - v.sigma);
+      const max = Math.min(1, v.baseline + v.sigma);
+      return {
+        period_number: k,
+        median_retention: v.baseline,
+        normal_range: [min, max] as [number, number],
+      };
+    })
+    .sort((a, b) => a.period_number - b.period_number);
+
+  const extras = { cohort_count, total_users_analyzed, baseline_summary };
 
   return { findings, summary, extras };
 }

@@ -132,10 +132,10 @@ async function detectSegmentShifts(input: Input): Promise<SegmentShiftOutput> {
 
   const metric: SegmentMetric = input.metric ?? 'visits';
   const tz = input.timezone ?? 'UTC';
-  const min_effect = input.min_effect_size ?? 0.15;
+  const min_effect = input.min_effect_size ?? 0.01;
   const min_share = input.min_share ?? 0.05;
   const min_support = input.min_support ?? 100;
-  const use_chi = input.use_chi_square ?? true;
+  const use_chi = input.use_chi_square ?? false;
 
   const segmentKeys: SegmentKey[] = Array.isArray(input.segment_by)
     ? input.segment_by
@@ -247,12 +247,51 @@ async function detectSegmentShifts(input: Input): Promise<SegmentShiftOutput> {
       } ${(findings[0].effect_size * 100).toFixed(0)}pp change.`
     : 'No significant segment shifts detected for the selected period.';
 
+  // Prepare extras with actual data for the first segment if available
+  let extras = { current: [], previous: [] };
+  if (segmentKeys.length > 0) {
+    const firstSegment = segmentKeys[0];
+    try {
+      const currentRows = await getSegmentTotals({
+        websiteId,
+        metric,
+        segment_by: firstSegment,
+        date_from: input.date_from,
+        date_to: input.date_to,
+        timezone: tz,
+        normalize_labels: input.normalize_labels ?? true,
+      });
+
+      const prev = previousWindow(input.date_from, input.date_to);
+      const previousRows = await getSegmentTotals({
+        websiteId,
+        metric,
+        segment_by: firstSegment,
+        date_from: prev.from,
+        date_to: prev.to,
+        timezone: tz,
+        normalize_labels: input.normalize_labels ?? true,
+      });
+
+      extras = {
+        current: currentRows.slice(0, 10).map(r => ({
+          label: r.label || 'unknown',
+          value: typeof r.value === 'bigint' ? Number(r.value) : r.value ?? 0,
+        })),
+        previous: previousRows.slice(0, 10).map(r => ({
+          label: r.label || 'unknown',
+          value: typeof r.value === 'bigint' ? Number(r.value) : r.value ?? 0,
+        })),
+      };
+    } catch (error) {
+      // If there's an error fetching extras, just continue with empty arrays
+      // Silently continue with empty arrays
+    }
+  }
+
   return {
     findings,
     summary,
-    extras: {
-      current: [],
-      previous: [],
-    },
+    extras,
   };
 }
