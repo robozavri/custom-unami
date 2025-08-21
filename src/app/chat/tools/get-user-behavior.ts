@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import { parseISO, subDays, formatISO } from 'date-fns';
 import { getUserBehaviorMetrics } from '@/queries';
-import prisma from '@/lib/prisma';
-import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
-import { DEFAULT_WEBSITE_ID } from '../config';
+import { resolveWebsiteId } from './utils/website-resolver';
 
 const periodEnum = z.enum([
   'last_7_days',
@@ -24,22 +22,6 @@ const paramsSchema = z.object({
 });
 
 type Params = z.infer<typeof paramsSchema>;
-
-async function resolveWebsiteId(websiteIdInput?: string): Promise<string | null> {
-  if (websiteIdInput) return websiteIdInput;
-  const active = getActiveWebsiteId();
-  if (active) return active;
-  if (DEFAULT_WEBSITE_ID) return DEFAULT_WEBSITE_ID;
-  const first = await prisma.client.website.findFirst({
-    where: { deletedAt: null },
-    select: { id: true },
-  });
-  if (first?.id) {
-    setActiveWebsiteId(first.id);
-    return first.id;
-  }
-  return null;
-}
 
 function computeRange(period?: Params['period'], start?: string, end?: string) {
   // Default: last 14 days when no params provided
@@ -83,6 +65,7 @@ export const getUserBehaviorTool = {
   - Supports predefined periods (last_7_days, last_30_days, etc.) or custom date ranges (YYYY-MM-DD).
   - Supports path-based filtering via 'filter' (substring of url_path).
   - Returns per-user rows and a summary.
+  - websiteId: Optional. If not provided, will use the currently active website or find one automatically.
   `.trim(),
   inputSchema: paramsSchema,
   execute: async (rawParams: unknown) => {
@@ -96,8 +79,29 @@ export const getUserBehaviorTool = {
       offset,
     } = paramsSchema.parse(rawParams as Params);
 
+    // eslint-disable-next-line no-console
+    console.log('get-user-behavior: About to call resolveWebsiteId with:', websiteIdInput);
+
     const websiteId = await resolveWebsiteId(websiteIdInput);
+
+    // Add debug logging
+    // eslint-disable-next-line no-console
+    console.log('get-user-behavior: websiteId resolution:', {
+      input: websiteIdInput,
+      resolved: websiteId,
+      inputType: typeof websiteIdInput,
+      resolvedType: typeof websiteId,
+      functionName: resolveWebsiteId.name,
+      functionSource: resolveWebsiteId.toString().substring(0, 100),
+    });
+
     if (!websiteId) throw new Error('websiteId is required.');
+
+    // Validate that websiteId is a valid UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(websiteId)) {
+      throw new Error(`Invalid websiteId format: ${websiteId}. Expected UUID format.`);
+    }
 
     const { startDate, endDate } = computeRange(period, start_date, end_date);
 
