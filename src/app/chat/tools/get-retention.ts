@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { formatISO, parseISO, subDays } from 'date-fns';
-import { getRetentionMetrics } from '@/queries';
+import { getRetention } from '@/queries';
+import { getRetentionCohorts } from '@/queries/sql/anomaly-insights/getRetentionCohorts';
 import prisma from '@/lib/prisma';
 import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
 import { DEFAULT_WEBSITE_ID } from '../config';
@@ -71,27 +72,80 @@ export const getRetentionTool = {
 
     const { startDate, endDate } = computeRange(date_from, date_to);
 
-    const filters: any = { startDate, endDate };
-    if (event_name) {
-      // Map event_name to eventType if it's a known event
-      if (event_name === 'page_view') filters.eventType = 1;
-      else if (event_name === 'custom_event') filters.eventType = 2;
-      // For other event names, we'll use the default (pageview)
+    // Note: event_name filtering is not currently supported by the cohort queries used below.
+    // Compute cohort-based retention:
+    // - For day period: use getRetention() and take k=1 (day=1) retention per cohort date
+    // - For week/month periods: use getRetentionCohorts() and compute k=1 retention per cohort
+    let formatted: Array<{ date: string; active_users: number; retention_rate: number }>;
+
+    if (period === 'day') {
+      const rows = await getRetention(websiteId, { startDate, endDate });
+      // console.log('getRetention rows', rows);
+      // Build a map of date -> k=1 record
+      const byDate = new Map<string, { active_users: number; retention_rate: number }>();
+      for (const r of rows) {
+        if (r.day === 1) {
+          byDate.set(r.date, {
+            active_users: Number(r.returnVisitors) || 0,
+            retention_rate: Math.round((Number(r.percentage) || 0) * 100) / 100,
+          });
+        }
+      }
+
+      // Sort dates desc and limit
+      const dates = Array.from(byDate.keys()).sort((a, b) => (a < b ? 1 : -1));
+      const limited = dates.slice(0, date_range);
+      formatted = limited.map(d => ({ date: d, ...byDate.get(d)! }));
+    } else {
+      // week or month
+      const rows = await getRetentionCohorts({
+        websiteId,
+        period,
+        date_from: formatISO(startDate, { representation: 'date' }),
+        date_to: formatISO(endDate, { representation: 'date' }),
+        max_k: 1,
+      });
+
+      // Build cohort size (k=0) and k=1 actives per cohort
+      const sizeByCohort = new Map<string, number>();
+      const k1ByCohort = new Map<string, number>();
+      for (const r of rows) {
+        const cohort = r.cohort_start;
+        const count = Number(r.active_users) || 0;
+        if (r.k === 0) sizeByCohort.set(cohort, count);
+        else if (r.k === 1) k1ByCohort.set(cohort, count);
+      }
+
+      const items: Array<{ date: string; active_users: number; retention_rate: number }> = [];
+      for (const [cohort, k1] of k1ByCohort.entries()) {
+        const size = sizeByCohort.get(cohort) || 0;
+        const rate = size > 0 ? Math.round((k1 / size) * 100 * 100) / 100 : 0;
+        items.push({ date: cohort, active_users: k1, retention_rate: rate });
+      }
+
+      // Sort desc by date and limit
+      items.sort((a, b) => (a.date < b.date ? 1 : -1));
+      formatted = items.slice(0, date_range);
     }
-
-    const rows = await getRetentionMetrics(websiteId, filters, period, date_range);
-
-    const formatted = rows.map(r => ({
-      date: r.date,
-      active_users: r.active_users,
-      retention_rate: r.retention_rate,
-    }));
 
     const totalPeriods = formatted.length;
     const totalActiveUsers = formatted.reduce((s, it) => s + it.active_users, 0);
     const averageRetentionRate =
       totalPeriods > 0 ? formatted.reduce((s, it) => s + it.retention_rate, 0) / totalPeriods : 0;
-
+    // console.log('formatted', formatted);
+    // console.log('formatted', {
+    //   period,
+    //   date_range,
+    //   event_name: event_name || 'all_events',
+    //   start_date: formatISO(startDate, { representation: 'date' }),
+    //   end_date: formatISO(endDate, { representation: 'date' }),
+    //   summary: {
+    //     total_periods: totalPeriods,
+    //     total_active_users: totalActiveUsers,
+    //     average_retention_rate: Math.round(averageRetentionRate * 100) / 100,
+    //   },
+    //   results: formatted,
+    // });
     return {
       period,
       date_range,

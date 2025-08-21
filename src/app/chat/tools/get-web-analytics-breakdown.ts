@@ -143,6 +143,16 @@ export const getWebAnalyticsBreakdownTool = {
       custom_days,
     } = paramsSchema.parse(rawParams as Params);
 
+    // Log input parameters
+    // eslint-disable-next-line no-console
+    console.log('🔍 get-web-analytics-breakdown tool input params:', {
+      websiteId: websiteIdInput,
+      period,
+      group_by,
+      custom_days,
+      rawParams,
+    });
+
     const websiteId = await resolveWebsiteId(websiteIdInput);
     if (!websiteId) throw new Error('websiteId is required.');
 
@@ -182,7 +192,7 @@ export const getWebAnalyticsBreakdownTool = {
       );
     }
 
-    return {
+    const result = {
       period: actualPeriod,
       group_by: group_by,
       custom_days: custom_days,
@@ -227,6 +237,12 @@ export const getWebAnalyticsBreakdownTool = {
             : 0,
       },
     };
+
+    // Log the result
+    // eslint-disable-next-line no-console
+    console.log('✅ get-web-analytics-breakdown tool result:', result);
+
+    return result;
   },
 };
 

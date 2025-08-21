@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getWebStatistics } from '@/queries';
+import { getWebsiteStats } from '@/queries';
 import prisma from '@/lib/prisma';
 import { getActiveWebsiteId, setActiveWebsiteId } from '../state';
 import { DEFAULT_WEBSITE_ID } from '../config';
@@ -186,8 +186,8 @@ function formatDuration(seconds: number) {
 export const getWebStatisticTool = {
   name: 'get-web-statistic',
   description: `
-  - Get comprehensive web analytics statistics with comparison data.
-  - Includes visitors, page views, sessions, session duration, and bounce rate.
+  - Get comprehensive web analytics statistics with comparison data using the same logic as the dashboard.
+  - Includes page views, visitors (sessions), visits, bounce rate, and visit duration.
   - Supports multiple periods: today, yesterday, last_7_days, last_30_days, etc.
   - Provides percentage change comparisons between current and previous periods.
   - Custom period support with custom_days parameter.
@@ -201,107 +201,258 @@ export const getWebStatisticTool = {
       custom_days,
     } = paramsSchema.parse(rawParams as Params);
 
+    // Log input parameters
+    // eslint-disable-next-line no-console
+    console.log('🔍 get-web-statistic tool input params:', {
+      websiteId: websiteIdInput,
+      period,
+      custom_days,
+      rawParams,
+    });
+
     const websiteId = await resolveWebsiteId(websiteIdInput);
     if (!websiteId) throw new Error('websiteId is required.');
+
+    // eslint-disable-next-line no-console
+    console.log('🔍 Resolved websiteId:', websiteId);
 
     // If custom_days is provided but period is not "custom", use custom period
     let actualPeriod = period;
     if (custom_days && period !== 'custom') {
       actualPeriod = 'custom';
+      // eslint-disable-next-line no-console
+      console.log('🔄 Period adjusted to custom due to custom_days parameter');
     }
 
-    // Calculate date ranges based on period
-    const { currentStart, currentEnd, previousStart, previousEnd } = calculateDateRanges(
-      actualPeriod,
-      custom_days,
-    );
+    // eslint-disable-next-line no-console
+    console.log('🔍 Using period:', actualPeriod);
+    // eslint-disable-next-line no-console
+    console.log('🔍 Date parameters check:', {
+      hasDateFrom: !!(rawParams as any).date_from,
+      hasDateTo: !!(rawParams as any).date_to,
+      dateFrom: (rawParams as any).date_from,
+      dateTo: (rawParams as any).date_to,
+    });
 
-    // Get current period statistics
-    const currentStats = await getWebStatistics(websiteId, {
+    // Calculate date ranges - prioritize date_from/date_to if provided
+    let currentStart: string;
+    let currentEnd: string;
+    let previousStart: string;
+    let previousEnd: string;
+
+    if ((rawParams as any).date_from && (rawParams as any).date_to) {
+      // Use provided date range
+      currentStart = (rawParams as any).date_from;
+      currentEnd = (rawParams as any).date_to;
+
+      // Calculate previous period as same length before current start
+      const currentStartDate = new Date(currentStart);
+      const currentEndDate = new Date(currentEnd);
+      const periodLengthMs = currentEndDate.getTime() - currentStartDate.getTime();
+
+      const previousEndDate = new Date(currentStartDate.getTime() - 1); // Day before current start
+      const previousStartDate = new Date(previousEndDate.getTime() - periodLengthMs);
+
+      previousStart = previousStartDate.toISOString().split('T')[0];
+      previousEnd = previousEndDate.toISOString().split('T')[0];
+
+      // eslint-disable-next-line no-console
+      console.log('📅 Using provided date range:', {
+        currentStart,
+        currentEnd,
+        previousStart,
+        previousEnd,
+      });
+    } else {
+      // Fall back to calculated date ranges based on period
+      const dateRanges = calculateDateRanges(actualPeriod, custom_days);
+      currentStart = dateRanges.currentStart;
+      currentEnd = dateRanges.currentEnd;
+      previousStart = dateRanges.previousStart;
+      previousEnd = dateRanges.previousEnd;
+
+      // eslint-disable-next-line no-console
+      console.log('📅 Using calculated date range:', {
+        currentStart,
+        currentEnd,
+        previousStart,
+        previousEnd,
+      });
+    }
+
+    // eslint-disable-next-line no-console
+    console.log('📅 Calculated date ranges:', {
+      currentStart,
+      currentEnd,
+      previousStart,
+      previousEnd,
+    });
+
+    // Get current period statistics using getWebsiteStats (same as dashboard)
+    // eslint-disable-next-line no-console
+    console.log('📊 Fetching current period stats for:', {
+      startDate: currentStart,
+      endDate: currentEnd,
+    });
+
+    const currentStatsResult = await getWebsiteStats(websiteId, {
       startDate: new Date(currentStart),
       endDate: new Date(currentEnd),
     });
+    const currentStats = currentStatsResult[0] || {};
+
+    // eslint-disable-next-line no-console
+    console.log('📊 Raw current stats result:', currentStatsResult);
+    // eslint-disable-next-line no-console
+    console.log('📊 Current stats object:', currentStats);
 
     // Get previous period statistics for comparison
-    const previousStats = await getWebStatistics(websiteId, {
+    // eslint-disable-next-line no-console
+    console.log('📊 Fetching previous period stats for:', {
+      startDate: previousStart,
+      endDate: previousEnd,
+    });
+
+    const previousStatsResult = await getWebsiteStats(websiteId, {
       startDate: new Date(previousStart),
       endDate: new Date(previousEnd),
     });
+    const previousStats = previousStatsResult[0] || {};
+
+    // eslint-disable-next-line no-console
+    console.log('📊 Raw previous stats result:', previousStatsResult);
+    // eslint-disable-next-line no-console
+    console.log('📊 Previous stats object:', previousStats);
+
+    // Convert BigInt values to regular numbers (same as dashboard)
+    // eslint-disable-next-line no-console
+    console.log('🔄 Converting BigInt values to regular numbers...');
+
+    const current = {
+      pageviews: Number((currentStats as any).pageviews) || 0,
+      visitors: Number((currentStats as any).visitors) || 0,
+      visits: Number((currentStats as any).visits) || 0,
+      bounces: Number((currentStats as any).bounces) || 0,
+      totaltime: Number((currentStats as any).totaltime) || 0,
+    };
+    const previous = {
+      pageviews: Number((previousStats as any).pageviews) || 0,
+      visitors: Number((previousStats as any).visitors) || 0,
+      visits: Number((previousStats as any).visits) || 0,
+      bounces: Number((previousStats as any).bounces) || 0,
+      totaltime: Number((previousStats as any).totaltime) || 0,
+    };
+
+    // eslint-disable-next-line no-console
+    console.log('🔄 Converted current stats:', current);
+    // eslint-disable-next-line no-console
+    console.log('🔄 Converted previous stats:', previous);
 
     // Calculate percentage changes
-    const visitorsChangePercentage = calculatePercentageChange(
-      currentStats.visitors,
-      previousStats.visitors,
-    );
+    // eslint-disable-next-line no-console
+    console.log('🧮 Calculating percentage changes...');
+
     const pageViewsChangePercentage = calculatePercentageChange(
-      currentStats.page_views,
-      previousStats.page_views,
+      current.pageviews,
+      previous.pageviews,
     );
-    const sessionsChangePercentage = calculatePercentageChange(
-      currentStats.sessions,
-      previousStats.sessions,
-    );
-    const sessionDurationChangePercentage = calculatePercentageChange(
-      currentStats.avg_session_duration_seconds,
-      previousStats.avg_session_duration_seconds,
+    const visitorsChangePercentage = calculatePercentageChange(current.visitors, previous.visitors);
+    const visitsChangePercentage = calculatePercentageChange(current.visits, previous.visits);
+    const totalTimeChangePercentage = calculatePercentageChange(
+      current.totaltime,
+      previous.totaltime,
     );
 
+    // eslint-disable-next-line no-console
+    console.log('🧮 Percentage changes calculated:', {
+      pageViews: pageViewsChangePercentage,
+      visitors: visitorsChangePercentage,
+      visits: visitsChangePercentage,
+      totalTime: totalTimeChangePercentage,
+    });
+
     // Calculate bounce rates
+    // eslint-disable-next-line no-console
+    console.log('🧮 Calculating bounce rates...');
+
     const currentBounceRate =
-      currentStats.sessions > 0
-        ? Math.round((currentStats.bounce_sessions / currentStats.sessions) * 100)
-        : 0;
+      current.visits > 0 ? Math.round((current.bounces / current.visits) * 100) : 0;
     const previousBounceRate =
-      previousStats.sessions > 0
-        ? Math.round((previousStats.bounce_sessions / previousStats.sessions) * 100)
-        : 0;
+      previous.visits > 0 ? Math.round((previous.bounces / previous.visits) * 100) : 0;
     const bounceRateChangePercentage = calculatePercentageChange(
       currentBounceRate,
       previousBounceRate,
     );
 
-    return {
-      visitors: {
-        current: currentStats.visitors,
-        previous: previousStats.visitors,
-        change_percentage: visitorsChangePercentage,
-        comparison: `Visitors: ${
-          visitorsChangePercentage >= 0 ? 'increased' : 'decreased'
-        } by ${Math.abs(visitorsChangePercentage)}%, to ${currentStats.visitors} from ${
-          previousStats.visitors
-        }`,
+    // eslint-disable-next-line no-console
+    console.log('🧮 Bounce rates calculated:', {
+      current: currentBounceRate,
+      previous: previousBounceRate,
+      change: bounceRateChangePercentage,
+    });
+
+    // Calculate average visit duration
+    // eslint-disable-next-line no-console
+    console.log('🧮 Calculating average visit duration...');
+
+    const currentAvgVisitDuration = current.visits > 0 ? current.totaltime / current.visits : 0;
+    const previousAvgVisitDuration = previous.visits > 0 ? previous.totaltime / previous.visits : 0;
+
+    // eslint-disable-next-line no-console
+    console.log('🧮 Visit duration calculated:', {
+      current: {
+        seconds: currentAvgVisitDuration,
+        formatted: formatDuration(currentAvgVisitDuration),
       },
+      previous: {
+        seconds: previousAvgVisitDuration,
+        formatted: formatDuration(previousAvgVisitDuration),
+      },
+    });
+
+    // eslint-disable-next-line no-console
+    console.log('🏗️ Building final result object...');
+
+    const result = {
       page_views: {
-        current: currentStats.page_views,
-        previous: previousStats.page_views,
+        current: current.pageviews,
+        previous: previous.pageviews,
         change_percentage: pageViewsChangePercentage,
         comparison: `Page views: ${
           pageViewsChangePercentage >= 0 ? 'increased' : 'decreased'
-        } by ${Math.abs(pageViewsChangePercentage)}%, to ${currentStats.page_views} from ${
-          previousStats.page_views
+        } by ${Math.abs(pageViewsChangePercentage)}%, to ${current.pageviews} from ${
+          previous.pageviews
         }`,
       },
-      sessions: {
-        current: currentStats.sessions,
-        previous: previousStats.sessions,
-        change_percentage: sessionsChangePercentage,
-        comparison: `Sessions: ${
-          sessionsChangePercentage >= 0 ? 'increased' : 'decreased'
-        } by ${Math.abs(sessionsChangePercentage)}%, to ${currentStats.sessions} from ${
-          previousStats.sessions
+      visitors: {
+        current: current.visitors,
+        previous: previous.visitors,
+        change_percentage: visitorsChangePercentage,
+        comparison: `Visitors: ${
+          visitorsChangePercentage >= 0 ? 'increased' : 'decreased'
+        } by ${Math.abs(visitorsChangePercentage)}%, to ${current.visitors} from ${
+          previous.visitors
         }`,
       },
-      session_duration: {
-        current_seconds: currentStats.avg_session_duration_seconds,
-        previous_seconds: previousStats.avg_session_duration_seconds,
-        current_formatted: formatDuration(currentStats.avg_session_duration_seconds),
-        previous_formatted: formatDuration(previousStats.avg_session_duration_seconds),
-        change_percentage: sessionDurationChangePercentage,
-        comparison: `Session duration: ${
-          sessionDurationChangePercentage >= 0 ? 'increased' : 'decreased'
-        } by ${Math.abs(sessionDurationChangePercentage)}%, to ${formatDuration(
-          currentStats.avg_session_duration_seconds,
-        )} from ${formatDuration(previousStats.avg_session_duration_seconds)}`,
+      visits: {
+        current: current.visits,
+        previous: previous.visits,
+        change_percentage: visitsChangePercentage,
+        comparison: `Visits: ${
+          visitsChangePercentage >= 0 ? 'increased' : 'decreased'
+        } by ${Math.abs(visitsChangePercentage)}%, to ${current.visits} from ${previous.visits}`,
+      },
+      visit_duration: {
+        current_seconds: currentAvgVisitDuration,
+        previous_seconds: previousAvgVisitDuration,
+        current_formatted: formatDuration(currentAvgVisitDuration),
+        previous_formatted: formatDuration(previousAvgVisitDuration),
+        change_percentage: totalTimeChangePercentage,
+        comparison: `Visit duration: ${
+          totalTimeChangePercentage >= 0 ? 'increased' : 'decreased'
+        } by ${Math.abs(totalTimeChangePercentage)}%, to ${formatDuration(
+          currentAvgVisitDuration,
+        )} from ${formatDuration(previousAvgVisitDuration)}`,
       },
       bounce_rate: {
         current: currentBounceRate,
@@ -322,6 +473,12 @@ export const getWebStatisticTool = {
         previous_end: previousEnd,
       },
     };
+
+    // Log the result
+    // eslint-disable-next-line no-console
+    console.log('✅ get-web-statistic tool result:', result);
+
+    return result;
   },
 };
 

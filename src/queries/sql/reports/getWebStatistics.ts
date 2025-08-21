@@ -36,26 +36,25 @@ async function relationalQuery(
 
   const result = await rawQuery(
     `
-    select
-      count(distinct website_event.session_id) as visitors,
-      count(*) as page_views,
-      count(distinct website_event.session_id) as sessions,
-      avg(${getTimestampDiffSQL(
-        'min(website_event.created_at)',
-        'max(website_event.created_at)',
-      )}) as avg_session_duration_seconds,
-      count(distinct case when session_views.views_count = 1 then website_event.session_id end) as bounce_sessions
-    from website_event
-    left join (
-      select 
+    with session_stats as (
+      select
         session_id,
-        count(*) as views_count
-      from website_event 
+        count(*) as views_count,
+        ${getTimestampDiffSQL('min(created_at)', 'max(created_at)')} as session_duration
+      from website_event
       where website_id = {{websiteId::uuid}}
         and created_at between {{startDate}} and {{endDate}}
         and event_type = {{eventType}}
       group by session_id
-    ) session_views on session_views.session_id = website_event.session_id
+    )
+    select
+      count(distinct website_event.session_id) as visitors,
+      count(*) as page_views,
+      count(distinct website_event.session_id) as sessions,
+      coalesce(avg(ss.session_duration), 0) as avg_session_duration_seconds,
+      count(distinct case when ss.views_count = 1 then website_event.session_id end) as bounce_sessions
+    from website_event
+    left join session_stats ss on ss.session_id = website_event.session_id
     ${cohortQuery}
     ${joinSession}
     where website_event.website_id = {{websiteId::uuid}}
