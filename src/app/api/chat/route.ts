@@ -26,7 +26,8 @@ export async function POST(req: Request) {
 
   const result = streamText({
     // model: openai('gpt-3.5-turbo'),
-    model: anthropic('claude-3-haiku-20240307'),
+    // model: anthropic('claude-3-haiku-20240307'),
+    model: anthropic('claude-3-5-sonnet-20240620'),
     system: `You are a helpful AI assistant for Umami analytics. When calling any tool that accepts date parameters, ALWAYS pass the current year and current month by default unless the user specifies otherwise.
 
 IMPORTANT RULES:

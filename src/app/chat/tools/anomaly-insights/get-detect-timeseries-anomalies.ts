@@ -2,8 +2,7 @@
 import { z } from 'zod';
 import { runQuery, getDatabaseType, CLICKHOUSE, PRISMA } from '@/lib/db';
 import prisma from '@/lib/prisma';
-import { getActiveWebsiteId, setActiveWebsiteId } from '../../state';
-import { DEFAULT_WEBSITE_ID } from '../../config';
+import { getWebsiteId } from '../../state';
 import { getTimeseriesAnomaliesQueries } from '@/queries/sql/anomaly-insights/getTimeseriesAnomalies';
 
 // const log = debug('umami:anomaly:timeseries');
@@ -110,21 +109,8 @@ function detectAnomalies(
   return anomalies;
 }
 
-async function resolveWebsiteId(websiteIdInput?: string): Promise<string | null> {
-  if (websiteIdInput) return websiteIdInput;
-  const active = getActiveWebsiteId();
-  if (active) return active;
-  if (DEFAULT_WEBSITE_ID) return DEFAULT_WEBSITE_ID;
-
-  const first = await prisma.client.website.findFirst({
-    where: { deletedAt: null },
-    select: { id: true },
-  });
-  if (first?.id) {
-    setActiveWebsiteId(first.id);
-    return first.id;
-  }
-  return null;
+async function resolveWebsiteId(websiteIdInput?: string): Promise<string> {
+  return getWebsiteId(websiteIdInput);
 }
 
 export const getDetectTimeseriesAnomaliesTool = {
@@ -142,9 +128,6 @@ export const getDetectTimeseriesAnomaliesTool = {
     const websiteId = await resolveWebsiteId(params.websiteId);
     // log('[websiteId]', websiteId);
     // console.log('[anomaly][timeseries] resolved websiteId', websiteId);
-    if (!websiteId) {
-      throw new Error('No website ID available');
-    }
 
     const dbType = getDatabaseType();
     // log('[db]', { hasClickhouseUrl: !!process.env.CLICKHOUSE_URL, dbType });
