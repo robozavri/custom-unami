@@ -25,6 +25,7 @@ const seedCompareBySegmentShift = require('./seed-compare-by-segment-shift');
 const seedCheckEventDropChain = require('./seed-check-event-drop-chain');
 const seedCheckDropCorrelatedPages = require('./seed-check-drop-correlated-pages');
 const seedCheckDropCorrelatedEvents = require('./seed-check-drop-correlated-events');
+const seedMostFrequentEvents = require('./seed-most-frequent-events');
 
 // Configuration
 const DEFAULT_WEBSITE_ID = '5801af32-ebe2-4273-9e58-89de8971a2fd';
@@ -127,6 +128,7 @@ async function main() {
     { name: 'check-event-drop-chain', func: seedCheckEventDropChain },
     { name: 'check-drop-correlated-pages', func: seedCheckDropCorrelatedPages },
     { name: 'check-drop-correlated-events', func: seedCheckDropCorrelatedEvents },
+    { name: 'most-frequent-events', func: seedMostFrequentEvents },
   ];
 
   // Filter out skipped seeds
@@ -189,6 +191,7 @@ async function main() {
   console.log(
     `  - Conversion drop insights (by source, by path, by country, by device, by segment shift, event drop chain, drop correlated pages, and drop correlated events)`,
   );
+  console.log(`  - Most frequent events analysis with weighted event distribution`);
 
   if (failureCount === 0) {
     console.log(

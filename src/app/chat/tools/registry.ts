@@ -46,6 +46,7 @@ import {
   getReturningEventUsersTool,
   getSegmentedEventsTool,
   getEventTrendsTool,
+  getMostFrequentEventsTool,
 } from './event-tools';
 
 const log = debug('umami:chat:tools');
@@ -404,6 +405,11 @@ export function buildToolsMap(): Record<string, any> {
       description: getEventTrendsTool.description,
       inputSchema: getEventTrendsTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getEventTrendsTool.execute(params),
+    }),
+    'get-most-frequent-events': (tool as any)({
+      description: getMostFrequentEventsTool.description,
+      inputSchema: getMostFrequentEventsTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getMostFrequentEventsTool.execute(params),
     }),
   };
 }

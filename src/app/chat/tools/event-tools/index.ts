@@ -28,3 +28,6 @@ export type { GetSegmentedEventsTool } from './get-segmented-events';
 
 export { getEventTrendsTool } from './get-event-trends';
 export type { GetEventTrendsTool } from './get-event-trends';
+
+export { getMostFrequentEventsTool } from './get-most-frequent-events';
+export type { GetMostFrequentEventsTool } from './get-most-frequent-events';
