@@ -3,6 +3,13 @@
 
 /* eslint-disable no-console */
 
+// Import test functions
+const {
+  testCompareByPath,
+  testCompareByPathWithCustomDates,
+  testCompareByPathWithDifferentEvents,
+} = require('./test-compare-by-path');
+
 async function testGetDetailedPageViews(fetchFn, baseUrl) {
   const url = `${baseUrl}/api/tools/get-detailed-page-views`;
 
@@ -160,6 +167,9 @@ async function run() {
     testGetDetailedPageViews(fetchFn, baseUrl),
     testGetWebStatistic(fetchFn, baseUrl),
     testCompareBySource(fetchFn, baseUrl),
+    testCompareByPath(fetchFn, baseUrl),
+    testCompareByPathWithCustomDates(fetchFn, baseUrl),
+    testCompareByPathWithDifferentEvents(fetchFn, baseUrl),
     // testDashboardStats(fetchFn, baseUrl), // Skip dashboard test for now
   ]);
 
@@ -167,7 +177,10 @@ async function run() {
   console.log('get-detailed-page-views:', results[0] ? '✅ PASSED' : '❌ FAILED');
   console.log('get-web-statistic:', results[1] ? '✅ PASSED' : '❌ FAILED');
   console.log('compare-by-source:', results[2] ? '✅ PASSED' : '❌ FAILED');
-  // console.log('dashboard-stats:', results[3] ? '✅ PASSED' : '❌ FAILED');
+  console.log('compare-by-path:', results[3] ? '✅ PASSED' : '❌ FAILED');
+  console.log('compare-by-path-custom-dates:', results[4] ? '✅ PASSED' : '❌ FAILED');
+  console.log('compare-by-path-different-events:', results[5] ? '✅ PASSED' : '❌ FAILED');
+  // console.log('dashboard-stats:', results[6] ? '✅ PASSED' : '❌ FAILED');
 }
 
 run().catch(err => {

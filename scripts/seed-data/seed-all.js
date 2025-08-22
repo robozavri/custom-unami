@@ -17,6 +17,8 @@ const seedSegmentShifts = require('./seed-segment-shifts');
 const seedPathDropoffs = require('./seed-path-dropoffs');
 const seedAnomalyTimeseries = require('./seed-anomaly-timeseries');
 const seedTimeseriesAnomaliesAdvanced = require('./seed-timeseries-anomalies-advanced');
+const seedCompareBySource = require('./seed-compare-by-source');
+const seedCompareByPath = require('./seed-compare-by-path');
 
 // Configuration
 const DEFAULT_WEBSITE_ID = '5801af32-ebe2-4273-9e58-89de8971a2fd';
@@ -111,6 +113,8 @@ async function main() {
     { name: 'path-dropoffs', func: seedPathDropoffs },
     { name: 'anomaly-timeseries', func: seedAnomalyTimeseries },
     { name: 'timeseries-anomalies-advanced', func: seedTimeseriesAnomaliesAdvanced },
+    { name: 'compare-by-source', func: seedCompareBySource },
+    { name: 'compare-by-path', func: seedCompareByPath },
   ];
 
   // Filter out skipped seeds
@@ -170,6 +174,7 @@ async function main() {
   console.log(`  - Various device types, countries, and traffic sources`);
   console.log(`  - Business events with realistic data`);
   console.log(`  - Anomalies and retention patterns`);
+  console.log(`  - Conversion drop insights (by source and by path)`);
 
   if (failureCount === 0) {
     console.log(
