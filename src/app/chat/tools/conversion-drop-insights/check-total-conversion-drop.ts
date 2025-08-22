@@ -29,7 +29,7 @@ export interface ConversionDropResult {
   };
 }
 
-async function resolveWebsiteId(websiteIdInput?: string): Promise<string> {
+export async function resolveWebsiteId(websiteIdInput?: string): Promise<string> {
   return getWebsiteId(websiteIdInput);
 }
 
