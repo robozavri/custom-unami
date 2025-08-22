@@ -24,6 +24,7 @@ const seedCompareByDevice = require('./seed-compare-by-device');
 const seedCompareBySegmentShift = require('./seed-compare-by-segment-shift');
 const seedCheckEventDropChain = require('./seed-check-event-drop-chain');
 const seedCheckDropCorrelatedPages = require('./seed-check-drop-correlated-pages');
+const seedCheckDropCorrelatedEvents = require('./seed-check-drop-correlated-events');
 
 // Configuration
 const DEFAULT_WEBSITE_ID = '5801af32-ebe2-4273-9e58-89de8971a2fd';
@@ -125,6 +126,7 @@ async function main() {
     { name: 'compare-by-segment-shift', func: seedCompareBySegmentShift },
     { name: 'check-event-drop-chain', func: seedCheckEventDropChain },
     { name: 'check-drop-correlated-pages', func: seedCheckDropCorrelatedPages },
+    { name: 'check-drop-correlated-events', func: seedCheckDropCorrelatedEvents },
   ];
 
   // Filter out skipped seeds
@@ -185,7 +187,7 @@ async function main() {
   console.log(`  - Business events with realistic data`);
   console.log(`  - Anomalies and retention patterns`);
   console.log(
-    `  - Conversion drop insights (by source, by path, by country, by device, by segment shift, event drop chain, and drop correlated pages)`,
+    `  - Conversion drop insights (by source, by path, by country, by device, by segment shift, event drop chain, drop correlated pages, and drop correlated events)`,
   );
 
   if (failureCount === 0) {

@@ -1,0 +1,100 @@
+Tool name: check-drop-correlated-events
+
+Goal:
+Identify which events are strongly correlated with users who drop off and fail to reach the target conversion. This includes non-conversion actions (e.g. "clicked_help", "opened_settings") that disproportionately occur in non-converting sessions. The goal is to flag distracting, confusing, or problematic behavior patterns.
+
+🧮 Formula:
+1. Collect sessions that **did NOT fire** the target conversion event.
+2. Aggregate all events that occurred within those sessions (excluding the target event).
+3. Compare those event frequencies against converting sessions (optional).
+4. Rank by session frequency and statistical weight (if available).
+
+🧱 Required Tables:
+- `event`: contains all event names, timestamps, session ID
+- `session`: contains metadata and session_id
+- `website`: for filtering by site
+
+⚙️ Input Parameters:
+```json
+{
+  "websiteId": "string",         // Website UUID
+  "targetEvent": "string",       // The conversion event to check against
+  "from": "YYYY-MM-DD",          // Start of period
+  "to": "YYYY-MM-DD",            // End of period
+  "compareWithConverters": true  // Optional: include % difference vs converters
+}
+📤 Output Schema:
+
+ts
+Copy
+Edit
+[
+  {
+    "event": string,
+    "dropSessionCount": number,
+    "dropSessionPercent": number,
+    "converterSessionPercent"?: number,         // if compareWithConverters = true
+    "delta"?: number,                           // dropSessionPercent - converterSessionPercent
+    "direction"?: "higher_in_drops" | "higher_in_converters"
+  },
+  ...
+]
+🧠 SQL Query (Database-Agnostic Skeleton):
+
+sql
+Copy
+Edit
+-- Step 1: Non-converting sessions
+WITH drop_sessions AS (
+  SELECT s.session_id
+  FROM session s
+  LEFT JOIN event e ON e.session_id = s.session_id
+    AND e.event_name = {{targetEvent}}
+    AND e.created_at BETWEEN {{from}} AND {{to}}
+  WHERE s.website_id = {{websiteId}}
+    AND s.started_at BETWEEN {{from}} AND {{to}}
+    AND e.event_name IS NULL
+),
+
+-- Step 2: All events from drop sessions (excluding the conversion event itself)
+drop_events AS (
+  SELECT e.event_name, e.session_id
+  FROM event e
+  JOIN drop_sessions ds ON ds.session_id = e.session_id
+  WHERE e.created_at BETWEEN {{from}} AND {{to}}
+    AND e.event_name != {{targetEvent}}
+)
+
+-- Step 3: Frequency of each event in drop sessions
+SELECT
+  e.event_name AS event,
+  COUNT(DISTINCT e.session_id) AS dropSessionCount,
+  ROUND(COUNT(DISTINCT e.session_id) * 100.0 / (SELECT COUNT(*) FROM drop_sessions), 2) AS dropSessionPercent
+FROM drop_events e
+GROUP BY e.event_name
+ORDER BY dropSessionPercent DESC
+👉 If compareWithConverters is true, a similar CTE structure should fetch event frequencies from converting sessions, and then post-processing should compute delta and direction.
+
+🧠 Post-processing Logic (Pseudocode):
+
+ts
+Copy
+Edit
+for each event:
+  if compareWithConverters:
+    delta = dropSessionPercent - converterSessionPercent
+    direction =
+      delta > 1 ? "higher_in_drops"
+      : delta < -1 ? "higher_in_converters"
+      : "neutral"
+💡 Notes for Cursor:
+
+This tool surfaces sessions where users gave up or got distracted
+
+Helps answer: “What events often occur before users fail to convert?”
+
+You can sort by drop session percent or delta (if comparing with converters)
+
+Works for behavioral debugging in onboarding, checkout, upgrade flows
+
+SQL must be PostgreSQL and ClickHouse compatible

@@ -20,3 +20,6 @@ export { checkEventDropChainTool } from './check-event-drop-chain';
 export type { CheckEventDropChainTool } from './check-event-drop-chain';
 export { checkDropCorrelatedPagesTool } from './check-drop-correlated-pages';
 export type { CheckDropCorrelatedPagesTool } from './check-drop-correlated-pages';
+
+export { checkDropCorrelatedEventsTool } from './check-drop-correlated-events';
+export type { CheckDropCorrelatedEventsTool } from './check-drop-correlated-events';

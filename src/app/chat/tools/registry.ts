@@ -32,6 +32,7 @@ import {
   compareBySegmentShiftTool,
   checkEventDropChainTool,
   checkDropCorrelatedPagesTool,
+  checkDropCorrelatedEventsTool,
 } from './conversion-drop-insights';
 import {
   getEventOverviewTool,
@@ -347,6 +348,11 @@ export function buildToolsMap(): Record<string, any> {
       description: checkDropCorrelatedPagesTool.description,
       inputSchema: checkDropCorrelatedPagesTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => checkDropCorrelatedPagesTool.execute(params),
+    }),
+    'check-drop-correlated-events': (tool as any)({
+      description: checkDropCorrelatedEventsTool.description,
+      inputSchema: checkDropCorrelatedEventsTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => checkDropCorrelatedEventsTool.execute(params),
     }),
     'get-event-overview': (tool as any)({
       description: getEventOverviewTool.description,
