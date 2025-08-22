@@ -1,0 +1,121 @@
+Tool name: compare-by-segment-shift
+
+Goal:
+Detect and compare conversion rate shifts across user-defined segments between two time periods. A segment is defined as one or more fields from the `session` table (e.g. country, device_type, browser). This tool helps uncover which user cohorts are behaving differently over time.
+
+🧮 Formula:
+For each segment (e.g. device_type = 'mobile', country = 'US'):
+- conversion_rate = conversions / unique_visitors
+- rate_delta = current_conversion_rate - previous_conversion_rate
+- percent_change = (rate_delta / previous_conversion_rate) * 100
+
+🧱 Required Tables:
+- `event`: stores events (used to count conversions)
+- `session`: holds user metadata like country, device, referrer, browser
+- `website`: for filtering by website ID
+
+⚙️ Input Parameters:
+```json
+{
+  "websiteId": "string",           // Website UUID
+  "conversionEvent": "string",     // Name of conversion event (e.g. "signup")
+  "segmentFields": ["string"],     // Array of field names from session table (e.g. ["device_type", "country"])
+  "currentFrom": "YYYY-MM-DD",     // Start of current period
+  "currentTo": "YYYY-MM-DD",       // End of current period
+  "previousFrom": "YYYY-MM-DD",    // Start of previous period
+  "previousTo": "YYYY-MM-DD",      // End of previous period
+  "minVisitors": 5                 // Optional: exclude segments with low visitor counts
+}
+📤 Output Schema:
+
+ts
+Copy
+Edit
+[
+  {
+    "segment": {
+      [field: string]: string
+    },
+    "current": {
+      "conversions": number,
+      "uniqueVisitors": number,
+      "conversionRate": number
+    },
+    "previous": {
+      "conversions": number,
+      "uniqueVisitors": number,
+      "conversionRate": number
+    },
+    "change": {
+      "rateDelta": number,
+      "percentChange": number,
+      "direction": "increase" | "decrease" | "no_change"
+    }
+  },
+  ...
+]
+🧠 SQL Query Template (Database-Agnostic):
+
+The segment fields are dynamically substituted.
+
+sql
+Copy
+Edit
+-- Example for segmentFields = ['device_type', 'country']
+
+-- Current period
+SELECT
+  s.device_type,
+  s.country,
+  COUNT(DISTINCT e.session_id) AS conversions,
+  COUNT(DISTINCT s.visitor_id) AS unique_visitors,
+  'current' AS period
+FROM event e
+JOIN session s ON e.session_id = s.session_id
+WHERE e.website_id = {{websiteId}}
+  AND e.event_name = {{conversionEvent}}
+  AND e.created_at BETWEEN {{currentFrom}} AND {{currentTo}}
+GROUP BY s.device_type, s.country
+
+UNION ALL
+
+-- Previous period
+SELECT
+  s.device_type,
+  s.country,
+  COUNT(DISTINCT e.session_id) AS conversions,
+  COUNT(DISTINCT s.visitor_id) AS unique_visitors,
+  'previous' AS period
+FROM event e
+JOIN session s ON e.session_id = s.session_id
+WHERE e.website_id = {{websiteId}}
+  AND e.event_name = {{conversionEvent}}
+  AND e.created_at BETWEEN {{previousFrom}} AND {{previousTo}}
+GROUP BY s.device_type, s.country
+🧠 Post-processing Logic (Pseudocode):
+
+ts
+Copy
+Edit
+// Group rows by segment key (e.g. "mobile|US")
+for each segment:
+  rate_current = current_conversions / current_visitors
+  rate_previous = previous_conversions / previous_visitors
+  delta = rate_current - rate_previous
+  percent_change = (delta / rate_previous) * 100
+
+  direction = 
+    percent_change > 0.5 ? "increase" :
+    percent_change < -0.5 ? "decrease" :
+    "no_change"
+💡 Notes for Cursor:
+
+Dynamically generate GROUP BY and SELECT fields based on segmentFields input
+
+Segment keys in output should be clean JSON objects (not flattened strings)
+
+Sort by absolute percent change or delta to prioritize insights
+
+Supports PostgreSQL and ClickHouse (use generic SQL)
+
+Use minVisitors to exclude noise from very small segments

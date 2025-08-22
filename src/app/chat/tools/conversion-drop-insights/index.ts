@@ -12,3 +12,6 @@ export type { CompareByCountryTool } from './compare-by-country';
 
 export { compareByDeviceTool } from './compare-by-device';
 export type { CompareByDeviceTool } from './compare-by-device';
+
+export { compareBySegmentShiftTool } from './compare-by-segment-shift';
+export type { CompareBySegmentShiftTool } from './compare-by-segment-shift';
