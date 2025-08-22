@@ -18,3 +18,5 @@ export type { CompareBySegmentShiftTool } from './compare-by-segment-shift';
 
 export { checkEventDropChainTool } from './check-event-drop-chain';
 export type { CheckEventDropChainTool } from './check-event-drop-chain';
+export { checkDropCorrelatedPagesTool } from './check-drop-correlated-pages';
+export type { CheckDropCorrelatedPagesTool } from './check-drop-correlated-pages';

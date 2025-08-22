@@ -31,6 +31,7 @@ import {
   compareByDeviceTool,
   compareBySegmentShiftTool,
   checkEventDropChainTool,
+  checkDropCorrelatedPagesTool,
 } from './conversion-drop-insights';
 import {
   getEventOverviewTool,
@@ -341,6 +342,11 @@ export function buildToolsMap(): Record<string, any> {
       description: checkEventDropChainTool.description,
       inputSchema: checkEventDropChainTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => checkEventDropChainTool.execute(params),
+    }),
+    'check-drop-correlated-pages': (tool as any)({
+      description: checkDropCorrelatedPagesTool.description,
+      inputSchema: checkDropCorrelatedPagesTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => checkDropCorrelatedPagesTool.execute(params),
     }),
     'get-event-overview': (tool as any)({
       description: getEventOverviewTool.description,

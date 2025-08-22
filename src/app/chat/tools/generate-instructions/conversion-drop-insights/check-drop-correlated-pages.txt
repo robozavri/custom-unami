@@ -1,0 +1,101 @@
+Tool name: check-drop-correlated-pages
+
+Goal:
+Identify which URL paths (pages) are most frequently visited immediately before users drop off from a funnel or conversion event. These "correlated pages" may be confusing, too long, broken, or poorly optimized.
+
+This tool answers: “Which pages are most associated with users who don’t convert?”
+
+🧮 Formula:
+1. Define a target event (conversion goal).
+2. Find all sessions where the user **did not trigger** the target event.
+3. For those sessions, extract the **last visited page** (or last N pageviews).
+4. Count and rank those pages by frequency.
+
+🧱 Required Tables:
+- `event`: contains events like “signup”, “purchase”
+- `pageview`: holds session ID and `url_path`, ordered by timestamp
+- `session`: contains metadata like visitor ID, session start/end
+
+⚙️ Input Parameters:
+```json
+{
+  "websiteId": "string",            // UUID of the website
+  "targetEvent": "string",          // The conversion event (e.g. "checkout_complete")
+  "from": "YYYY-MM-DD",             // Start date
+  "to": "YYYY-MM-DD",               // End date
+  "lastPagesLimit": 1 | 2 | 3       // How many last pages to extract per session
+}
+📤 Output Schema:
+
+ts
+Copy
+Edit
+[
+  {
+    "path": string,
+    "dropSessions": number,
+    "percentageOfDropSessions": number, // percent of drop sessions this page appeared in
+    "avgPositionFromEnd": number        // average position from end of session (1 = last)
+  },
+  ...
+]
+🧠 SQL Query (Database-Agnostic Skeleton):
+
+sql
+Copy
+Edit
+-- Step 1: Find sessions that DID NOT convert
+WITH non_converting_sessions AS (
+  SELECT s.session_id
+  FROM session s
+  LEFT JOIN event e ON e.session_id = s.session_id
+    AND e.event_name = {{targetEvent}}
+    AND e.created_at BETWEEN {{from}} AND {{to}}
+  WHERE s.website_id = {{websiteId}}
+    AND s.started_at BETWEEN {{from}} AND {{to}}
+    AND e.event_name IS NULL
+),
+
+-- Step 2: Get last N pageviews from those sessions
+last_pages AS (
+  SELECT
+    p.session_id,
+    p.url_path,
+    ROW_NUMBER() OVER (PARTITION BY p.session_id ORDER BY p.created_at DESC) AS position_from_end
+  FROM pageview p
+  JOIN non_converting_sessions ncs ON ncs.session_id = p.session_id
+  WHERE p.created_at BETWEEN {{from}} AND {{to}}
+)
+
+-- Step 3: Aggregate correlated page data
+SELECT
+  lp.url_path AS path,
+  COUNT(DISTINCT lp.session_id) AS dropSessions,
+  ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM non_converting_sessions), 2) AS percentageOfDropSessions,
+  ROUND(AVG(lp.position_from_end), 2) AS avgPositionFromEnd
+FROM last_pages lp
+WHERE lp.position_from_end <= {{lastPagesLimit}}
+GROUP BY lp.url_path
+ORDER BY dropSessions DESC
+🧠 Post-processing Logic (Pseudocode):
+
+ts
+Copy
+Edit
+// No extra processing needed — SQL handles most of the aggregation.
+// Optional: exclude very low-frequency pages (e.g. <3 sessions)
+💡 Notes for Cursor:
+
+This tool helps find distraction or friction pages
+
+Ideal for diagnosing drop-off patterns during onboarding, checkout, or signup
+
+You can optionally include session duration or bounce indicators
+
+Output can power summaries like:
+
+"Most users who dropped off last visited /pricing"
+
+"40% of drop sessions ended on /features or /blog"
+
+SQL must work with both PostgreSQL and ClickHouse
