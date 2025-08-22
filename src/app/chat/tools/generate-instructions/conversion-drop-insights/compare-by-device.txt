@@ -1,0 +1,111 @@
+Tool name: compare-by-device
+
+Goal:
+Analyze conversion performance segmented by device type (e.g. desktop, mobile, tablet) across two periods. This tool helps detect changes in behavior or performance across platforms that may signal device-specific issues or usage shifts.
+
+🧮 Formula:
+For each device type:
+- conversion_rate = conversions / unique_visitors
+- rate_delta = current_conversion_rate - previous_conversion_rate
+- percent_change = (rate_delta / previous_conversion_rate) * 100
+
+🧱 Required Tables:
+- `event`: tracks custom events like conversions
+- `session`: includes visitor ID and device info (`device_type` column)
+- `website`: used for filtering by `websiteId`
+
+⚙️ Input Parameters:
+```json
+{
+  "websiteId": "string",           // Website UUID
+  "conversionEvent": "string",     // e.g. "signup", "purchase"
+  "currentFrom": "YYYY-MM-DD",     // Current period start
+  "currentTo": "YYYY-MM-DD",       // Current period end
+  "previousFrom": "YYYY-MM-DD",    // Previous period start
+  "previousTo": "YYYY-MM-DD",      // Previous period end
+  "minVisitors": 5                 // Optional: exclude low traffic devices
+}
+
+Output Schema:
+
+[
+  {
+    "device": string, // e.g. "desktop", "mobile", "tablet"
+    "current": {
+      "conversions": number,
+      "uniqueVisitors": number,
+      "conversionRate": number
+    },
+    "previous": {
+      "conversions": number,
+      "uniqueVisitors": number,
+      "conversionRate": number
+    },
+    "change": {
+      "rateDelta": number,
+      "percentChange": number,
+      "direction": "increase" | "decrease" | "no_change"
+    }
+  },
+  ...
+]
+
+
+🧠 SQL Query (Database-Agnostic):
+Assumes session.device_type holds normalized device values like mobile, desktop, tablet.
+
+-- Current period
+SELECT
+  s.device_type AS device,
+  COUNT(DISTINCT e.session_id) AS conversions,
+  COUNT(DISTINCT s.visitor_id) AS unique_visitors,
+  'current' AS period
+FROM event e
+JOIN session s ON e.session_id = s.session_id
+WHERE e.website_id = {{websiteId}}
+  AND e.event_name = {{conversionEvent}}
+  AND e.created_at BETWEEN {{currentFrom}} AND {{currentTo}}
+GROUP BY s.device_type
+
+UNION ALL
+
+-- Previous period
+SELECT
+  s.device_type AS device,
+  COUNT(DISTINCT e.session_id) AS conversions,
+  COUNT(DISTINCT s.visitor_id) AS unique_visitors,
+  'previous' AS period
+FROM event e
+JOIN session s ON e.session_id = s.session_id
+WHERE e.website_id = {{websiteId}}
+  AND e.event_name = {{conversionEvent}}
+  AND e.created_at BETWEEN {{previousFrom}} AND {{previousTo}}
+GROUP BY s.device_type
+
+
+🧠 Post-processing Logic (Pseudocode):
+
+group rows by `device`
+
+for each device:
+  rate_current = conversions_current / visitors_current
+  rate_prev = conversions_prev / visitors_prev
+  delta = rate_current - rate_prev
+  pct_change = (delta / rate_prev) * 100
+
+  direction = pct_change > 0.5 ? "increase"
+           : pct_change < -0.5 ? "decrease"
+           : "no_change"
+
+
+💡 Notes for Cursor:
+
+Return only normalized device names; discard unknown/null values unless useful
+
+This tool is useful to detect mobile drop-offs, desktop bounces, etc.
+
+Ideal for charting or summarizing mobile-vs-desktop behavior
+
+Output should be sorted by absolute rate delta or percent change
+
+Compatible with PostgreSQL and ClickHouse-safe syntax

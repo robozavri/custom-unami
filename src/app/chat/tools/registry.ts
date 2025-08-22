@@ -28,6 +28,7 @@ import {
   compareBySourceTool,
   compareByPathTool,
   compareByCountryTool,
+  compareByDeviceTool,
 } from './conversion-drop-insights';
 import {
   getEventOverviewTool,
@@ -323,6 +324,11 @@ export function buildToolsMap(): Record<string, any> {
       description: compareByCountryTool.description,
       inputSchema: compareByCountryTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => compareByCountryTool.execute(params),
+    }),
+    'compare-by-device': (tool as any)({
+      description: compareByDeviceTool.description,
+      inputSchema: compareByDeviceTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => compareByDeviceTool.execute(params),
     }),
     'get-event-overview': (tool as any)({
       description: getEventOverviewTool.description,

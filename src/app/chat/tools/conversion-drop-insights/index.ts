@@ -9,3 +9,6 @@ export type { CompareByPathTool } from './compare-by-path';
 
 export { compareByCountryTool } from './compare-by-country';
 export type { CompareByCountryTool } from './compare-by-country';
+
+export { compareByDeviceTool } from './compare-by-device';
+export type { CompareByDeviceTool } from './compare-by-device';

@@ -10,6 +10,12 @@ const {
   testCompareByPathWithDifferentEvents,
 } = require('./test-compare-by-path');
 
+const {
+  testCompareByCountry,
+  testCompareByCountryWithCustomDates,
+  testCompareByCountryWithDifferentEvents,
+} = require('./test-compare-by-country');
+
 async function testGetDetailedPageViews(fetchFn, baseUrl) {
   const url = `${baseUrl}/api/tools/get-detailed-page-views`;
 
@@ -110,6 +116,41 @@ async function testCompareBySource(fetchFn, baseUrl) {
   return true;
 }
 
+async function testCompareByDevice(fetchFn, baseUrl) {
+  const url = `${baseUrl}/api/tools/compare-by-device`;
+
+  const params = {
+    conversionEvent: 'purchase',
+    currentFrom: '2025-08-01',
+    currentTo: '2025-08-31',
+    previousFrom: '2025-07-01',
+    previousTo: '2025-07-31',
+    minVisitors: 5,
+    // websiteId: 'YOUR_WEBSITE_ID', // optional
+  };
+
+  console.log('\n=== Testing compare-by-device tool ===');
+  console.log('POST', url);
+  console.log('Params:', JSON.stringify(params, null, 2));
+
+  const res = await fetchFn(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+
+  let text = await res.text();
+  if (!res.ok) {
+    console.error('Request failed:', res.status, res.statusText);
+    console.error(text);
+    return false;
+  }
+
+  console.log('\n--- JSON Response ---');
+  console.log(text);
+  return true;
+}
+
 // async function testDashboardStats(fetchFn, baseUrl) {
 //   // We need a website ID to test the dashboard stats
 //   // For now, let's test with a sample website ID or get it from the tool response
@@ -170,6 +211,10 @@ async function run() {
     testCompareByPath(fetchFn, baseUrl),
     testCompareByPathWithCustomDates(fetchFn, baseUrl),
     testCompareByPathWithDifferentEvents(fetchFn, baseUrl),
+    testCompareByCountry(fetchFn, baseUrl),
+    testCompareByCountryWithCustomDates(fetchFn, baseUrl),
+    testCompareByCountryWithDifferentEvents(fetchFn, baseUrl),
+    testCompareByDevice(fetchFn, baseUrl),
     // testDashboardStats(fetchFn, baseUrl), // Skip dashboard test for now
   ]);
 
@@ -180,6 +225,10 @@ async function run() {
   console.log('compare-by-path:', results[3] ? '✅ PASSED' : '❌ FAILED');
   console.log('compare-by-path-custom-dates:', results[4] ? '✅ PASSED' : '❌ FAILED');
   console.log('compare-by-path-different-events:', results[5] ? '✅ PASSED' : '❌ FAILED');
+  console.log('compare-by-country:', results[6] ? '✅ PASSED' : '❌ FAILED');
+  console.log('compare-by-country-custom-dates:', results[7] ? '✅ PASSED' : '❌ FAILED');
+  console.log('compare-by-country-different-events:', results[8] ? '✅ PASSED' : '❌ FAILED');
+  console.log('compare-by-device:', results[9] ? '✅ PASSED' : '❌ FAILED');
   // console.log('dashboard-stats:', results[6] ? '✅ PASSED' : '❌ FAILED');
 }
 
