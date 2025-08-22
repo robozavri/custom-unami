@@ -47,6 +47,7 @@ import {
   getSegmentedEventsTool,
   getEventTrendsTool,
   getMostFrequentEventsTool,
+  getUniqueButtonClickUsersTool,
 } from './event-tools';
 
 const log = debug('umami:chat:tools');
@@ -410,6 +411,11 @@ export function buildToolsMap(): Record<string, any> {
       description: getMostFrequentEventsTool.description,
       inputSchema: getMostFrequentEventsTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getMostFrequentEventsTool.execute(params),
+    }),
+    'get-unique-button-click-users': (tool as any)({
+      description: getUniqueButtonClickUsersTool.description,
+      inputSchema: getUniqueButtonClickUsersTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getUniqueButtonClickUsersTool.execute(params),
     }),
   };
 }
