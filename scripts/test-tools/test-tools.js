@@ -68,6 +68,41 @@ async function testGetWebStatistic(fetchFn, baseUrl) {
   return true;
 }
 
+async function testCompareBySource(fetchFn, baseUrl) {
+  const url = `${baseUrl}/api/tools/compare-by-source`;
+
+  const params = {
+    conversionEvent: 'purchase',
+    currentFrom: '2025-01-01',
+    currentTo: '2025-01-31',
+    previousFrom: '2024-12-01',
+    previousTo: '2024-12-31',
+    minVisitors: 10,
+    // websiteId: 'YOUR_WEBSITE_ID', // optional
+  };
+
+  console.log('\n=== Testing compare-by-source tool ===');
+  console.log('POST', url);
+  console.log('Params:', JSON.stringify(params, null, 2));
+
+  const res = await fetchFn(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+
+  let text = await res.text();
+  if (!res.ok) {
+    console.error('Request failed:', res.status, res.statusText);
+    console.error(text);
+    return false;
+  }
+
+  console.log('\n--- JSON Response ---');
+  console.log(text);
+  return true;
+}
+
 // async function testDashboardStats(fetchFn, baseUrl) {
 //   // We need a website ID to test the dashboard stats
 //   // For now, let's test with a sample website ID or get it from the tool response
@@ -120,17 +155,19 @@ async function run() {
   console.log('Testing tools at:', baseUrl);
   console.log('Make sure your dev server is running (yarn dev)');
 
-  // Test both tools
+  // Test all tools
   const results = await Promise.all([
     testGetDetailedPageViews(fetchFn, baseUrl),
     testGetWebStatistic(fetchFn, baseUrl),
+    testCompareBySource(fetchFn, baseUrl),
     // testDashboardStats(fetchFn, baseUrl), // Skip dashboard test for now
   ]);
 
   console.log('\n=== Test Results Summary ===');
   console.log('get-detailed-page-views:', results[0] ? '✅ PASSED' : '❌ FAILED');
   console.log('get-web-statistic:', results[1] ? '✅ PASSED' : '❌ FAILED');
-  // console.log('dashboard-stats:', results[2] ? '✅ PASSED' : '❌ FAILED');
+  console.log('compare-by-source:', results[2] ? '✅ PASSED' : '❌ FAILED');
+  // console.log('dashboard-stats:', results[3] ? '✅ PASSED' : '❌ FAILED');
 }
 
 run().catch(err => {

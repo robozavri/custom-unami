@@ -3,7 +3,7 @@
 
 const {
   getDetectSegmentShiftsTool,
-} = require('../src/app/chat/tools/anomaly-insights/get-detect-segment-shifts.ts');
+} = require('../../src/app/chat/tools/anomaly-insights/get-detect-segment-shifts.js');
 
 async function testSegmentShiftsTool() {
   // eslint-disable-next-line no-console

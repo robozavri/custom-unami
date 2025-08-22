@@ -1,0 +1,106 @@
+Tool name: compare-by-source
+
+Goal:
+This tool compares conversion performance per traffic source (referrer domain) between two time periods. It computes conversion count, unique visitors, and conversion rate per source and detects significant increases or decreases.
+
+🧮 Formula:
+For each referrer source:
+- conversion_rate = conversions / unique_visitors
+- rate_delta = conversion_rate_current - conversion_rate_previous
+- percent_change = (rate_delta / conversion_rate_previous) * 100
+
+🧱 Required tables:
+- `event`: contains all tracked events
+- `session`: contains referrer domain and visitor metadata
+- `website`: used to filter events by site
+
+⚙️ Input Parameters:
+```json
+{
+  "websiteId": "string",           // UUID of the website
+  "conversionEvent": "string",     // Name of the conversion event (e.g. "signup")
+  "currentFrom": "YYYY-MM-DD",     // Start of current period
+  "currentTo": "YYYY-MM-DD",       // End of current period
+  "previousFrom": "YYYY-MM-DD",    // Start of comparison period
+  "previousTo": "YYYY-MM-DD",      // End of comparison period
+  "minVisitors": 5                 // Optional: minimum unique visitors to include source
+}
+
+Output Schema:
+
+[
+  {
+    "source": string,
+    "current": {
+      "conversions": number,
+      "uniqueVisitors": number,
+      "conversionRate": number
+    },
+    "previous": {
+      "conversions": number,
+      "uniqueVisitors": number,
+      "conversionRate": number
+    },
+    "change": {
+      "rateDelta": number,
+      "percentChange": number,
+      "direction": "increase" | "decrease" | "no_change"
+    }
+  },
+  ...
+]
+
+SQL Query Example (Database Agnostic) 
+take in maind this is just examle and you need check tables and columns what you will use. 
+make you query database agnostic! :
+Use a UNION to combine results for both time periods, then compare in application logic.
+
+SELECT
+  s.referrer_domain AS source,
+  COUNT(DISTINCT e.session_id) AS conversions,
+  COUNT(DISTINCT s.visitor_id) AS unique_visitors,
+  'current' AS period
+FROM event e
+JOIN session s ON e.session_id = s.session_id
+WHERE e.website_id = {{websiteId}}
+  AND e.event_name = {{conversionEvent}}
+  AND e.created_at BETWEEN {{currentFrom}} AND {{currentTo}}
+GROUP BY s.referrer_domain
+
+UNION ALL
+
+SELECT
+  s.referrer_domain AS source,
+  COUNT(DISTINCT e.session_id) AS conversions,
+  COUNT(DISTINCT s.visitor_id) AS unique_visitors,
+  'previous' AS period
+FROM event e
+JOIN session s ON e.session_id = s.session_id
+WHERE e.website_id = {{websiteId}}
+  AND e.event_name = {{conversionEvent}}
+  AND e.created_at BETWEEN {{previousFrom}} AND {{previousTo}}
+GROUP BY s.referrer_domain
+
+Post-processing logic (pseudocode):
+
+group results by `source`
+
+for each source:
+  calc conversionRate_current = conversions_current / visitors_current
+  calc conversionRate_previous = conversions_previous / visitors_previous
+  delta = conversionRate_current - conversionRate_previous
+  percentChange = (delta / conversionRate_previous) * 100
+  direction = percentChange > 0.5 ? 'increase' : percentChange < -0.5 ? 'decrease' : 'no_change'
+
+
+Notes for Cursor:
+
+This tool is often embedded in higher-level diagnostic tools
+Final output must include normalized percentage change for prioritization
+Should exclude sources with very low visitor count (use minVisitors if set)
+Works with PostgreSQL and ClickHouse-compatible SQL
+
+
+
+
+

@@ -23,7 +23,7 @@ import { getChurnRateTool } from './get-churn-rate';
 import { getBounceRateTool } from './get-bounce-rate';
 import { getAverageSessionLengthTool } from './get-average-session-length';
 import { getCtrTool } from './get-click-through-rate';
-import { checkTotalConversionDropTool } from './conversion-drop-insights/check-total-conversion-drop';
+import { checkTotalConversionDropTool, compareBySourceTool } from './conversion-drop-insights';
 import {
   getEventOverviewTool,
   getEventConversionDropoffTool,
@@ -303,6 +303,11 @@ export function buildToolsMap(): Record<string, any> {
       description: checkTotalConversionDropTool.description,
       inputSchema: checkTotalConversionDropTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => checkTotalConversionDropTool.execute(params),
+    }),
+    'compare-by-source': (tool as any)({
+      description: compareBySourceTool.description,
+      inputSchema: compareBySourceTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => compareBySourceTool.execute(params),
     }),
     'get-event-overview': (tool as any)({
       description: getEventOverviewTool.description,
