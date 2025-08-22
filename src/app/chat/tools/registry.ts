@@ -30,6 +30,7 @@ import {
   compareByCountryTool,
   compareByDeviceTool,
   compareBySegmentShiftTool,
+  checkEventDropChainTool,
 } from './conversion-drop-insights';
 import {
   getEventOverviewTool,
@@ -335,6 +336,11 @@ export function buildToolsMap(): Record<string, any> {
       description: compareBySegmentShiftTool.description,
       inputSchema: compareBySegmentShiftTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => compareBySegmentShiftTool.execute(params),
+    }),
+    'check-event-drop-chain': (tool as any)({
+      description: checkEventDropChainTool.description,
+      inputSchema: checkEventDropChainTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => checkEventDropChainTool.execute(params),
     }),
     'get-event-overview': (tool as any)({
       description: getEventOverviewTool.description,

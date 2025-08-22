@@ -15,3 +15,6 @@ export type { CompareByDeviceTool } from './compare-by-device';
 
 export { compareBySegmentShiftTool } from './compare-by-segment-shift';
 export type { CompareBySegmentShiftTool } from './compare-by-segment-shift';
+
+export { checkEventDropChainTool } from './check-event-drop-chain';
+export type { CheckEventDropChainTool } from './check-event-drop-chain';

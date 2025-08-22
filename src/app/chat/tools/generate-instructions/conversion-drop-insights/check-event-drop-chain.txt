@@ -1,0 +1,102 @@
+Tool name: check-event-drop-chain
+
+Goal:
+Analyze how users drop off across a sequence of predefined events (a funnel). For each step in the chain, calculate how many users completed it and what percentage dropped off before reaching the next step.
+
+This tool answers: “Where are users dropping off in my funnel or event chain?”
+
+🧮 Formula:
+Given a sequence of N events (e.g. ["signup_started", "email_verified", "plan_selected", "payment_successful"]), the tool computes:
+
+- total_users_at_step_i = number of unique users who completed event[i]
+- drop_off_to_next = (step_i_users - step_i+1_users)
+- drop_off_rate = drop_off_to_next / step_i_users
+
+🧱 Required Tables:
+- `event`: contains event logs (event name, timestamp, user/session id, website id)
+- `website`: for filtering per site
+
+⚙️ Input Parameters:
+```json
+{
+  "websiteId": "string",          // Website UUID
+  "steps": ["string"],            // Ordered list of event names to treat as funnel steps
+  "from": "YYYY-MM-DD",           // Start of time range
+  "to": "YYYY-MM-DD",             // End of time range
+  "distinctBy": "session_id" | "visitor_id" // Whether to group users by session or visitor
+}
+📤 Output Schema:
+
+ts
+Copy
+Edit
+[
+  {
+    "step": string,
+    "users": number,
+    "dropToNext": number | null,         // null if this is the last step
+    "dropRate": number | null            // percent (0-100), null if last step
+  },
+  ...
+]
+🧠 SQL Query (Database-Agnostic Pseudocode):
+
+Each step is a subquery. Example for steps = ["signup_started", "email_verified", "payment_successful"]:
+
+sql
+Copy
+Edit
+-- Base structure for first step
+SELECT
+  'signup_started' AS step,
+  COUNT(DISTINCT e1.{{distinctId}}) AS users
+FROM event e1
+WHERE e1.website_id = {{websiteId}}
+  AND e1.event_name = 'signup_started'
+  AND e1.created_at BETWEEN {{from}} AND {{to}}
+
+UNION ALL
+
+-- Second step
+SELECT
+  'email_verified' AS step,
+  COUNT(DISTINCT e2.{{distinctId}}) AS users
+FROM event e2
+WHERE e2.website_id = {{websiteId}}
+  AND e2.event_name = 'email_verified'
+  AND e2.created_at BETWEEN {{from}} AND {{to}}
+  AND e2.{{distinctId}} IN (
+    SELECT e1.{{distinctId}}
+    FROM event e1
+    WHERE e1.website_id = {{websiteId}}
+      AND e1.event_name = 'signup_started'
+      AND e1.created_at BETWEEN {{from}} AND {{to}}
+  )
+
+-- Repeat this structure for additional steps
+Then post-process to compute dropToNext and dropRate between steps.
+
+🧠 Post-Processing Logic (Pseudocode):
+
+ts
+Copy
+Edit
+for (let i = 0; i < steps.length - 1; i++) {
+  const current = result[i]
+  const next = result[i + 1]
+
+  current.dropToNext = current.users - next.users
+  current.dropRate = (current.dropToNext / current.users) * 100
+}
+
+result[steps.length - 1].dropToNext = null
+result[steps.length - 1].dropRate = null
+💡 Notes for Cursor:
+
+Must support any length of funnel (2+ steps)
+
+Use either session_id or visitor_id for unique counting (via distinctBy)
+
+Output should clearly show how many users dropped between each step
+
+SQL must be compatible with PostgreSQL and ClickHouse
