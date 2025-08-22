@@ -16,14 +16,20 @@ const NEW_SESSIONS_PER_DAY_PER_MONTH = 150; // sessions unique to that month (no
 const EVENTS_PER_SESSION_MIN = 1;
 const EVENTS_PER_SESSION_MAX = 3;
 
-const BUSINESS_EVENTS = [
-  'Purchase',
-  'Add to Cart',
-  'View Product',
-  'Watch Demo',
-  'Signup',
-  'Upgrade Plan',
-];
+// Import enhanced constants for realistic data
+const {
+  BUSINESS_EVENTS,
+  PATHS,
+  // DEVICES,
+  // COUNTRIES,
+  // UTM_SOURCES,
+  // UTM_MEDIUMS,
+  // UTM_CAMPAIGNS,
+  pickRandomDevice,
+  pickRandomBrowser,
+  pickRandomCountry,
+  // generateEventData,
+} = require('./seed-constants');
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -121,20 +127,26 @@ async function cleanupRange(websiteId, start, end) {
 async function createSessions(websiteId, sessionInputs) {
   // sessionInputs: Array<{ id, createdAt, distinctId }>
   const BATCH = 500;
-  const sessions = sessionInputs.map(({ id, createdAt, distinctId }) => ({
-    id,
-    websiteId,
-    createdAt,
-    distinctId,
-    device: pickFrom(['desktop', 'mobile', 'tablet']),
-    country: pickFrom(['US', 'DE', 'GB', 'FR', 'CA', 'AU', 'JP', 'BR', 'IN', 'NL']),
-    browser: 'chrome',
-    os: 'windows',
-    screen: '1920x1080',
-    language: 'en-US',
-    region: 'CA',
-    city: 'San Francisco',
-  }));
+  const sessions = sessionInputs.map(({ id, createdAt, distinctId }) => {
+    const deviceInfo = pickRandomDevice();
+    const countryInfo = pickRandomCountry();
+    const browserInfo = pickRandomBrowser(deviceInfo.type);
+
+    return {
+      id,
+      websiteId,
+      createdAt,
+      distinctId,
+      device: deviceInfo.type,
+      country: countryInfo.code,
+      browser: browserInfo.browser,
+      os: deviceInfo.os,
+      screen: deviceInfo.screen,
+      language: 'en-US',
+      region: countryInfo.region,
+      city: countryInfo.city,
+    };
+  });
 
   for (let i = 0; i < sessions.length; i += BATCH) {
     const chunk = sessions.slice(i, i + BATCH);
@@ -161,15 +173,16 @@ async function createEventsForSessions(websiteId, sessionIds, monthStart, monthE
         Math.random() * (monthEndExclusive.getTime() - monthStart.getTime() - 1);
       const when = new Date(Math.floor(millis));
       const eventId = randomUUID();
+      const eventName = pickFrom(BUSINESS_EVENTS);
       events.push({
         id: eventId,
         websiteId,
         sessionId,
         visitId: sessionId,
         createdAt: when,
-        urlPath: '/',
+        urlPath: pickFrom(PATHS),
         eventType: 2,
-        eventName: pickFrom(BUSINESS_EVENTS),
+        eventName: eventName,
         referrerDomain: null,
         utmSource: null,
         utmMedium: null,

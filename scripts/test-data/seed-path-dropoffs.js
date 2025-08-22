@@ -3,6 +3,20 @@ require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const { randomUUID } = require('crypto');
 
+// Import enhanced constants for realistic data
+const {
+  // COUNTRIES,
+  // DEVICES,
+  // PATHS,
+  UTM_SOURCES,
+  UTM_MEDIUMS,
+  UTM_CAMPAIGNS,
+  pickRandomDevice,
+  pickRandomBrowser,
+  pickRandomCountry,
+  pickFrom,
+} = require('./seed-constants');
+
 const prisma = new PrismaClient({ errorFormat: 'pretty' });
 
 // Config (can be overridden via CLI flags)
@@ -274,12 +288,26 @@ function generateVisitPath(plan, startTime) {
 }
 
 async function seedDay({ websiteId, dayStartUtc, plan }) {
-  // Create sessions (1 per visit)
-  const sessions = Array.from({ length: plan.visits }).map(() => ({
-    id: randomUUID(),
-    websiteId,
-    createdAt: new Date(dayStartUtc.getTime() + pickInt(0, 23) * 3600 * 1000),
-  }));
+  // Create sessions (1 per visit) with enhanced demographics
+  const sessions = Array.from({ length: plan.visits }).map(() => {
+    const deviceInfo = pickRandomDevice();
+    const countryInfo = pickRandomCountry();
+    const browserInfo = pickRandomBrowser(deviceInfo.type);
+
+    return {
+      id: randomUUID(),
+      websiteId,
+      createdAt: new Date(dayStartUtc.getTime() + pickInt(0, 23) * 3600 * 1000),
+      device: deviceInfo.type,
+      country: countryInfo.code,
+      browser: browserInfo.browser,
+      os: deviceInfo.os,
+      screen: deviceInfo.screen,
+      language: 'en-US',
+      region: countryInfo.region,
+      city: countryInfo.city,
+    };
+  });
 
   // Persist sessions
   await prisma.$transaction(
@@ -289,6 +317,14 @@ async function seedDay({ websiteId, dayStartUtc, plan }) {
           id: s.id,
           websiteId: s.websiteId,
           createdAt: s.createdAt,
+          device: s.device,
+          country: s.country,
+          browser: s.browser,
+          os: s.os,
+          screen: s.screen,
+          language: s.language,
+          region: s.region,
+          city: s.city,
         },
       }),
     ),
@@ -304,6 +340,10 @@ async function seedDay({ websiteId, dayStartUtc, plan }) {
 
     // Create events for each page in the path
     for (let i = 0; i < path.length; i++) {
+      const utmSource = pickFrom(UTM_SOURCES);
+      const utmMedium = pickFrom(UTM_MEDIUMS);
+      const utmCampaign = pickFrom(UTM_CAMPAIGNS);
+
       events.push({
         id: randomUUID(),
         websiteId,
@@ -312,6 +352,11 @@ async function seedDay({ websiteId, dayStartUtc, plan }) {
         createdAt: timestamps[i],
         urlPath: path[i],
         eventType: 1, // pageview
+        referrerDomain: utmSource === 'direct' ? null : `${utmSource}.example.com`,
+        utmSource: utmSource === 'direct' ? null : utmSource,
+        utmMedium: utmSource === 'direct' ? null : utmMedium,
+        utmCampaign: utmSource === 'direct' ? null : utmCampaign,
+        pageTitle: path[i] === '/home' ? 'Home' : path[i].slice(1).toUpperCase(),
       });
     }
   }
@@ -331,6 +376,11 @@ async function seedDay({ websiteId, dayStartUtc, plan }) {
             createdAt: e.createdAt,
             urlPath: e.urlPath,
             eventType: e.eventType,
+            referrerDomain: e.referrerDomain,
+            utmSource: e.utmSource,
+            utmMedium: e.utmMedium,
+            utmCampaign: e.utmCampaign,
+            pageTitle: e.pageTitle,
           },
         }),
       ),
@@ -384,11 +434,15 @@ async function main() {
   );
 }
 
-main()
-  .catch(err => {
-    console.error(err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (require.main === module) {
+  main()
+    .catch(err => {
+      console.error(err);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
+
+module.exports = { main };

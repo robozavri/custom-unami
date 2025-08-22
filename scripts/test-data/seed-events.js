@@ -13,40 +13,18 @@ const BASELINE_VISITS_PER_DAY = 180; // sessions/day
 const AVG_PAGES_PER_VISIT = 4.5; // avg pageviews per session
 const BASELINE_EVENT_RATE = 0.15; // 15% of sessions have business events
 
-// Event types to seed
-const BUSINESS_EVENTS = [
-  'Start Free Trial',
-  'Watch Demo',
-  'Select Basic Plan',
-  'Select Pro Plan',
-  'Select Enterprise Plan',
-  'Request Integration',
-  'Contact Support',
-];
-
-// Simple pools
-const PATHS = [
-  '/',
-  '/pricing',
-  '/about',
-  '/contact',
-  '/blog',
-  '/features',
-  '/demo',
-  '/integrations',
-  '/support',
-];
-const DEVICES = ['desktop', 'mobile', 'tablet'];
-const COUNTRIES = ['US', 'DE', 'GB', 'FR', 'CA', 'AU', 'JP', 'BR', 'IN', 'NL'];
-const UTM_SOURCES = ['email', 'social', 'search', 'direct', 'affiliate', 'cpc', 'organic'];
-const UTM_MEDIUMS = ['email', 'social', 'cpc', 'organic', 'referral', 'banner'];
-const UTM_CAMPAIGNS = [
-  'summer2024',
-  'product-launch',
-  'pricing-update',
-  'feature-announcement',
-  'holiday-sale',
-];
+// Import enhanced constants for realistic data
+const {
+  BUSINESS_EVENTS,
+  PATHS,
+  UTM_SOURCES,
+  UTM_MEDIUMS,
+  UTM_CAMPAIGNS,
+  pickRandomDevice,
+  pickRandomBrowser,
+  pickRandomCountry,
+  generateEventData,
+} = require('./seed-constants');
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -173,81 +151,26 @@ function buildDayPlan() {
   };
 }
 
-function generateEventData(eventName) {
-  const eventData = [];
-
-  switch (eventName) {
-    case 'Start Free Trial':
-      eventData.push(
-        { key: 'plan_type', value: pickFrom(['basic', 'pro', 'enterprise']), type: 1 },
-        { key: 'trial_length', value: pickFrom([7, 14, 30]), type: 2 },
-        { key: 'source', value: pickFrom(['pricing_page', 'demo', 'landing_page']), type: 1 },
-      );
-      break;
-    case 'Watch Demo':
-      eventData.push(
-        { key: 'demo_type', value: pickFrom(['product', 'feature', 'use_case']), type: 1 },
-        { key: 'duration', value: pickInt(30, 300), type: 2 },
-        { key: 'completion_rate', value: Math.random(), type: 2 },
-      );
-      break;
-    case 'Select Basic Plan':
-    case 'Select Pro Plan':
-    case 'Select Enterprise Plan':
-      // eslint-disable-next-line no-case-declarations
-      const plan = eventName.replace('Select ', '').replace(' Plan', '').toLowerCase();
-      eventData.push(
-        { key: 'plan_type', value: plan, type: 1 },
-        { key: 'price', value: plan === 'basic' ? 29 : plan === 'pro' ? 99 : 299, type: 2 },
-        { key: 'billing_cycle', value: pickFrom(['monthly', 'annual']), type: 1 },
-        { key: 'discount_applied', value: Math.random() > 0.7, type: 3 },
-      );
-      break;
-    case 'Request Integration':
-      eventData.push(
-        { key: 'integration_type', value: pickFrom(['api', 'webhook', 'sdk', 'plugin']), type: 1 },
-        {
-          key: 'platform',
-          value: pickFrom(['shopify', 'woocommerce', 'magento', 'custom']),
-          type: 1,
-        },
-        { key: 'priority', value: pickFrom(['low', 'medium', 'high']), type: 1 },
-      );
-      break;
-    case 'Contact Support':
-      eventData.push(
-        {
-          key: 'support_type',
-          value: pickFrom(['technical', 'billing', 'feature_request', 'general']),
-          type: 1,
-        },
-        { key: 'priority', value: pickFrom(['low', 'medium', 'high', 'urgent']), type: 1 },
-        { key: 'channel', value: pickFrom(['chat', 'email', 'phone', 'ticket']), type: 1 },
-      );
-      break;
-  }
-
-  return eventData;
-}
-
 async function seedDay({ websiteId, dayStartUtc, plan }) {
-  // Create sessions with demographics
+  // Create sessions with realistic demographics
   const sessions = Array.from({ length: plan.visits }).map(() => {
     const sessionId = randomUUID();
-    const device = pickFrom(DEVICES);
-    const country = pickFrom(COUNTRIES);
+    const deviceInfo = pickRandomDevice();
+    const countryInfo = pickRandomCountry();
+    const browserInfo = pickRandomBrowser(deviceInfo.type);
+
     return {
       id: sessionId,
       websiteId,
       createdAt: new Date(dayStartUtc.getTime() + pickInt(0, 23) * 3600 * 1000),
-      device,
-      country,
-      browser: device === 'mobile' ? 'safari' : 'chrome',
-      os: device === 'mobile' ? 'ios' : 'windows',
-      screen: device === 'mobile' ? '375x667' : '1920x1080',
+      device: deviceInfo.type,
+      country: countryInfo.code,
+      browser: browserInfo.browser,
+      os: deviceInfo.os,
+      screen: deviceInfo.screen,
       language: 'en-US',
-      region: country === 'US' ? 'CA' : 'BY',
-      city: country === 'US' ? 'San Francisco' : 'Berlin',
+      region: countryInfo.region,
+      city: countryInfo.city,
     };
   });
 
@@ -386,7 +309,7 @@ async function seedDay({ websiteId, dayStartUtc, plan }) {
               websiteEventId: e.websiteEventId,
               dataKey: e.dataKey,
               stringValue: e.stringValue,
-              numberValue: e.numberValue,
+              numberValue: typeof e.numberValue === 'number' ? e.numberValue : null,
               dateValue: e.dateValue,
               dataType: e.dataType,
               createdAt: e.createdAt,

@@ -3,6 +3,20 @@ require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const { randomUUID } = require('crypto');
 
+// Import enhanced constants for realistic data
+const {
+  // COUNTRIES,
+  // DEVICES,
+  PATHS,
+  // UTM_SOURCES,
+  UTM_MEDIUMS,
+  UTM_CAMPAIGNS,
+  pickRandomDevice,
+  pickRandomBrowser,
+  pickRandomCountry,
+  pickFrom,
+} = require('./seed-constants');
+
 const prisma = new PrismaClient({ errorFormat: 'pretty' });
 
 // Config (can be overridden via CLI flags)
@@ -230,23 +244,27 @@ async function seedDay({ websiteId, dayStartUtc, plan }) {
     const sessionId = randomUUID();
 
     // Generate segment values for each session - ensure no null values
-    const country = generateSessionData(plan, 'country');
-    const device = generateSessionData(plan, 'device');
-    const browser = generateSessionData(plan, 'browser');
+    // const country = generateSessionData(plan, 'country');
+    // const device = generateSessionData(plan, 'device');
+    // const browser = generateSessionData(plan, 'browser');
 
     // Ensure all demographic fields have valid values
+    const deviceInfo = pickRandomDevice();
+    const countryInfo = pickRandomCountry();
+    const browserInfo = pickRandomBrowser(deviceInfo.type);
+
     const sessionData = {
       id: sessionId,
       websiteId,
       createdAt: new Date(dayStartUtc.getTime() + pickInt(0, 23) * 3600 * 1000),
-      country: country.label || 'US', // Fallback to US if null
-      device: device.label || 'desktop', // Fallback to desktop if null
-      browser: browser.label || 'chrome', // Fallback to chrome if null
-      os: (device.label || 'desktop') === 'mobile' ? 'ios' : 'windows',
-      screen: (device.label || 'desktop') === 'mobile' ? '375x667' : '1920x1080',
+      country: countryInfo.code,
+      device: deviceInfo.type,
+      browser: browserInfo.browser,
+      os: deviceInfo.os,
+      screen: deviceInfo.screen,
       language: 'en-US',
-      region: (country.label || 'US') === 'US' ? 'CA' : 'BY',
-      city: (country.label || 'US') === 'US' ? 'San Francisco' : 'Berlin',
+      region: countryInfo.region,
+      city: countryInfo.city,
     };
 
     // Validate that no demographic field is null/undefined
@@ -296,7 +314,7 @@ async function seedDay({ websiteId, dayStartUtc, plan }) {
       // Generate segment values for this event - ensure no null values
       const referrer = generateSessionData(plan, 'referrer_domain');
       const utmSource = generateSessionData(plan, 'utm_source');
-      const path = generateSessionData(plan, 'path');
+      const path = pickFrom(PATHS);
 
       // Add some time between pageviews (1-5 minutes)
       const timeOffset = pickInt(1, 5) * 60 * 1000;
@@ -308,22 +326,14 @@ async function seedDay({ websiteId, dayStartUtc, plan }) {
         sessionId: session.id,
         visitId: session.id, // treat session as a visit for simplicity
         createdAt: eventTime,
-        urlPath: path.label || '/', // Fallback to homepage
+        urlPath: path, // Use enhanced path
         eventType: 1, // pageview
         referrerDomain: referrer.label === 'direct' || !referrer.label ? null : referrer.label,
         utmSource: utmSource.label === 'direct' || !utmSource.label ? null : utmSource.label,
-        utmMedium:
-          (utmSource.label || '') === 'email'
-            ? 'email'
-            : (utmSource.label || '') === 'social'
-            ? 'social'
-            : 'cpc',
-        utmCampaign: `test-campaign-${pickInt(1, 5)}`,
-        pageTitle: `${
-          (path.label || '/') === '/'
-            ? 'Home'
-            : (path.label || '/').slice(1).charAt(0).toUpperCase() + (path.label || '/').slice(2)
-        } Page`,
+        utmMedium: utmSource.label === 'direct' || !utmSource.label ? null : pickFrom(UTM_MEDIUMS),
+        utmCampaign:
+          utmSource.label === 'direct' || !utmSource.label ? null : pickFrom(UTM_CAMPAIGNS),
+        pageTitle: path === '/home' ? 'Home' : path.slice(1).toUpperCase(),
       });
     }
   }
@@ -410,11 +420,15 @@ async function main() {
   );
 }
 
-main()
-  .catch(err => {
-    console.error(err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (require.main === module) {
+  main()
+    .catch(err => {
+      console.error(err);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
+
+module.exports = { main };

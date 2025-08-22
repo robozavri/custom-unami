@@ -13,11 +13,18 @@ const BASELINE_VISITS_PER_DAY = 240; // sessions/day
 const AVG_PAGES_PER_VISIT = 3.2; // avg pageviews per session
 const BASELINE_CLICK_RATE = 0.06; // 6% of impressions become clicks
 
-// Simple pools
-const PATHS = ['/', '/pricing', '/about', '/contact', '/blog'];
-const DEVICES = ['desktop', 'mobile', 'tablet'];
-const COUNTRIES = ['US', 'DE', 'GB', 'FR', 'CA'];
-const UTM_SOURCES = ['email', 'social', 'search', 'direct', 'affiliate'];
+// Import enhanced constants for realistic data
+const {
+  PATHS,
+  // DEVICES,
+  // COUNTRIES,
+  UTM_SOURCES,
+  UTM_MEDIUMS,
+  UTM_CAMPAIGNS,
+  pickRandomDevice,
+  pickRandomBrowser,
+  pickRandomCountry,
+} = require('./seed-constants');
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -140,23 +147,25 @@ function buildDayPlan() {
 }
 
 async function seedDay({ websiteId, dayStartUtc, plan }) {
-  // Create sessions with demographics
+  // Create sessions with realistic demographics
   const sessions = Array.from({ length: plan.visits }).map(() => {
     const sessionId = randomUUID();
-    const device = pickFrom(DEVICES);
-    const country = pickFrom(COUNTRIES);
+    const deviceInfo = pickRandomDevice();
+    const countryInfo = pickRandomCountry();
+    const browserInfo = pickRandomBrowser(deviceInfo.type);
+
     return {
       id: sessionId,
       websiteId,
       createdAt: new Date(dayStartUtc.getTime() + pickInt(0, 23) * 3600 * 1000),
-      device,
-      country,
-      browser: device === 'mobile' ? 'safari' : 'chrome',
-      os: device === 'mobile' ? 'ios' : 'windows',
-      screen: device === 'mobile' ? '375x667' : '1920x1080',
+      device: deviceInfo.type,
+      country: countryInfo.code,
+      browser: browserInfo.browser,
+      os: deviceInfo.os,
+      screen: deviceInfo.screen,
       language: 'en-US',
-      region: country === 'US' ? 'CA' : 'BY',
-      city: country === 'US' ? 'San Francisco' : 'Berlin',
+      region: countryInfo.region,
+      city: countryInfo.city,
     };
   });
 
@@ -188,6 +197,8 @@ async function seedDay({ websiteId, dayStartUtc, plan }) {
     for (let i = 0; i < views; i++) {
       const path = pickFrom(PATHS);
       const utmSource = pickFrom(UTM_SOURCES);
+      const utmMedium = pickFrom(UTM_MEDIUMS);
+      const utmCampaign = pickFrom(UTM_CAMPAIGNS);
       const viewTime = new Date(baseTime.getTime() + i * pickInt(60, 300) * 1000);
       // Pageview (impression)
       events.push({
@@ -201,6 +212,8 @@ async function seedDay({ websiteId, dayStartUtc, plan }) {
         eventName: null,
         referrerDomain: utmSource === 'direct' ? null : `${utmSource}.example.com`,
         utmSource: utmSource === 'direct' ? null : utmSource,
+        utmMedium: utmSource === 'direct' ? null : utmMedium,
+        utmCampaign: utmSource === 'direct' ? null : utmCampaign,
         pageTitle: path === '/' ? 'Home' : path.slice(1).toUpperCase(),
       });
 

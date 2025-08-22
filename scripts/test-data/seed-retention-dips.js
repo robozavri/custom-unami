@@ -3,6 +3,20 @@ require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const { randomUUID } = require('crypto');
 
+// Import enhanced constants for realistic data
+const {
+  // COUNTRIES,
+  // DEVICES,
+  PATHS,
+  UTM_SOURCES,
+  UTM_MEDIUMS,
+  UTM_CAMPAIGNS,
+  pickRandomDevice,
+  pickRandomBrowser,
+  pickRandomCountry,
+  pickFrom,
+} = require('./seed-constants');
+
 const prisma = new PrismaClient({ errorFormat: 'pretty' });
 
 // Config (can be overridden via CLI flags)
@@ -237,32 +251,41 @@ async function seedCohorts(cohorts) {
     // Group data by session
     for (const item of cohort.data) {
       if (item.type === 'session') {
+        const deviceInfo = pickRandomDevice();
+        const countryInfo = pickRandomCountry();
+        const browserInfo = pickRandomBrowser(deviceInfo.type);
+
         sessions.set(item.sessionId, {
           id: item.sessionId,
           websiteId: DEFAULT_WEBSITE_ID,
           createdAt: item.periodDate,
-          country: 'US',
-          device: 'desktop',
-          browser: 'chrome',
-          os: 'windows',
-          screen: '1920x1080',
+          country: countryInfo.code,
+          device: deviceInfo.type,
+          browser: browserInfo.browser,
+          os: deviceInfo.os,
+          screen: deviceInfo.screen,
           language: 'en-US',
-          region: 'CA',
-          city: 'San Francisco',
+          region: countryInfo.region,
+          city: countryInfo.city,
         });
       } else if (item.type === 'event') {
+        const utmSource = pickFrom(UTM_SOURCES);
+        const utmMedium = pickFrom(UTM_MEDIUMS);
+        const utmCampaign = pickFrom(UTM_CAMPAIGNS);
+        const path = pickFrom(PATHS);
+
         events.push({
           id: randomUUID(),
           websiteId: DEFAULT_WEBSITE_ID,
           sessionId: item.sessionId,
           visitId: item.sessionId,
           eventType: 1, // pageview
-          urlPath: '/',
-          pageTitle: 'Home Page',
-          referrerDomain: null,
-          utmSource: null,
-          utmMedium: null,
-          utmCampaign: null,
+          urlPath: path,
+          pageTitle: path === '/home' ? 'Home' : path.slice(1).toUpperCase(),
+          referrerDomain: utmSource === 'direct' ? null : `${utmSource}.example.com`,
+          utmSource: utmSource === 'direct' ? null : utmSource,
+          utmMedium: utmSource === 'direct' ? null : utmMedium,
+          utmCampaign: utmSource === 'direct' ? null : utmCampaign,
           createdAt: item.eventDate,
         });
       }
