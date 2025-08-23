@@ -49,3 +49,5 @@ export type { GetMostFrequentEventsTool } from './get-most-frequent-events';
 
 export { getUniqueButtonClickUsersTool } from './get-unique-button-click-users';
 export type { GetUniqueButtonClickUsersTool } from './get-unique-button-click-users';
+
+export { getEventComparisonTool } from './get-event-comparison';

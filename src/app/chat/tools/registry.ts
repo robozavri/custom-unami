@@ -54,6 +54,7 @@ import {
   getMostFrequentEventsTool,
   getUniqueButtonClickUsersTool,
 } from './event-tools';
+import { getEventComparisonTool } from './event-tools/get-event-comparison';
 
 const log = debug('umami:chat:tools');
 
@@ -446,6 +447,11 @@ export function buildToolsMap(): Record<string, any> {
       description: getUniqueButtonClickUsersTool.description,
       inputSchema: getUniqueButtonClickUsersTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getUniqueButtonClickUsersTool.execute(params),
+    }),
+    'get-event-comparison': (tool as any)({
+      description: getEventComparisonTool.description,
+      inputSchema: getEventComparisonTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getEventComparisonTool.execute(params),
     }),
   };
 }

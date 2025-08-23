@@ -6,11 +6,16 @@ done 4. რა არის საშუალო რაოდენობა ev
 done 5. რა პროცენტმა მომხმარებელმა მიაღწია event X-ის შემდეგ event Y-მდე?
 done 6. რომელი event-ებიდან ხდება ყველაზე მეტი drop-off?
 done 7. რომელი feature-ს (event) იყენებენ ყველაზე ხშირად? უკვე არის ამისთვის თული: Most Frequent Events
-8. რამდენი % ახალი მომხმარებელი აკეთებს event X პირველ დღეს?
-9. რამდენი მომხმარებელი უბრუნდება და იმეორებს კონკრეტულ event-ს?
-10. რომელი სეგმენტები (ქვეყანა, მოწყობილობა, გეგმა) უფრო ხშირად აკეთებენ event-ს?
-11. რამდენი event ხდება დღეში/კვირაში/თვეში?
-12. რამდენია CTR (click-through rate) კონკრეტულ CTA event-ზე?
-13. რამდენი წარმატებული checkout event იყო vs add_to_cart event?
+done 8. რამდენი % ახალი მომხმარებელი აკეთებს event X პირველ დღეს?
+done 9. რამდენი მომხმარებელი უბრუნდება და იმეორებს კონკრეტულ event-ს? არსებული tool: get-returning-event-users
+done 10. რომელი სეგმენტები (ქვეყანა, მოწყობილობა, გეგმა) უფრო ხშირად აკეთებენ event-ს? 
+    get-segmented-events (DB-აგნოსტური). მას შეგიძლია გადასცე:
+    segment: country | device | plan
+    event_name (არასავალდებულო)
+    date_from/date_to ან days
+done 11. რამდენი event ხდება დღეში/კვირაში/თვეში? არსებული Tool: get-events-per-period
+done 12. რამდენია CTR (click-through rate) კონკრეტულ CTA event-ზე?
+    არსებული tool: get-click-through-rate (CTR)
+done 13. რამდენი წარმატებული checkout event იყო vs add_to_cart event?
 14. რა არის ratio “signups” vs “visits”?
 15. რომელი event-ები იწვევს crash-ს ან error-ს?

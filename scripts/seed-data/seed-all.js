@@ -1,7 +1,6 @@
 /* eslint-disable no-console */
 require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
-// const path = require('path');
 
 const prisma = new PrismaClient({ errorFormat: 'pretty' });
 
@@ -31,6 +30,7 @@ const seedEventConversionFunnel = require('./seed-event-conversion-funnel');
 const seedEventDropoffs = require('./seed-event-dropoffs');
 const seedAverageEventsPerSession = require('./seed-average-events-per-session');
 const seedNewUserFirstDayEventRate = require('./seed-new-user-first-day-event-rate');
+const { seedEventComparison } = require('./seed-event-comparison');
 
 // Configuration
 const DEFAULT_WEBSITE_ID = '5801af32-ebe2-4273-9e58-89de8971a2fd';
@@ -139,6 +139,7 @@ async function main() {
     { name: 'event-dropoffs', func: seedEventDropoffs },
     { name: 'average-events-per-session', func: seedAverageEventsPerSession },
     { name: 'new-user-first-day-event-rate', func: seedNewUserFirstDayEventRate },
+    { name: 'event-comparison', func: seedEventComparison },
   ];
 
   // Filter out skipped seeds
