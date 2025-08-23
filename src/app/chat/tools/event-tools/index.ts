@@ -25,6 +25,9 @@ export type { GetEventConversionFunnelTool } from './get-event-conversion-funnel
 export { getEventDropoffsTool } from './get-event-dropoffs';
 export type { GetEventDropoffsTool } from './get-event-dropoffs';
 
+export { getNewUserFirstDayEventRateTool } from './get-new-user-first-day-event-rate';
+export type { GetNewUserFirstDayEventRateTool } from './get-new-user-first-day-event-rate';
+
 export { getTotalUniqueEventsTool } from './get-total-unique-events';
 export type { GetTotalUniqueEventsTool } from './get-total-unique-events';
 

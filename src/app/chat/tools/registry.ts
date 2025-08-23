@@ -44,6 +44,7 @@ import {
   getAverageEventsPerSessionTool,
   getEventConversionFunnelTool,
   getEventDropoffsTool,
+  getNewUserFirstDayEventRateTool,
   getTotalUniqueEventsTool,
   // Event Trends Tools
   getEventsPerPeriodTool,
@@ -404,6 +405,11 @@ export function buildToolsMap(): Record<string, any> {
       description: getEventDropoffsTool.description,
       inputSchema: getEventDropoffsTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getEventDropoffsTool.execute(params),
+    }),
+    'get-new-user-first-day-event-rate': (tool as any)({
+      description: getNewUserFirstDayEventRateTool.description,
+      inputSchema: getNewUserFirstDayEventRateTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getNewUserFirstDayEventRateTool.execute(params),
     }),
     'get-total-unique-events': (tool as any)({
       description: getTotalUniqueEventsTool.description,
