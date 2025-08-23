@@ -27,6 +27,7 @@ const seedCheckDropCorrelatedPages = require('./seed-check-drop-correlated-pages
 const seedCheckDropCorrelatedEvents = require('./seed-check-drop-correlated-events');
 const seedMostFrequentEvents = require('./seed-most-frequent-events');
 const seedEventFrequencyDistribution = require('./seed-event-frequency-distribution');
+const seedAverageEventsPerSession = require('./seed-average-events-per-session');
 
 // Configuration
 const DEFAULT_WEBSITE_ID = '5801af32-ebe2-4273-9e58-89de8971a2fd';
@@ -131,6 +132,7 @@ async function main() {
     { name: 'check-drop-correlated-events', func: seedCheckDropCorrelatedEvents },
     { name: 'most-frequent-events', func: seedMostFrequentEvents },
     { name: 'event-frequency-distribution', func: seedEventFrequencyDistribution },
+    { name: 'average-events-per-session', func: seedAverageEventsPerSession },
   ];
 
   // Filter out skipped seeds

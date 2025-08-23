@@ -41,6 +41,7 @@ import {
   getUniqueUsersTool,
   getEventFrequencyPerUserTool,
   getEventFrequencyDistributionTool,
+  getAverageEventsPerSessionTool,
   getTotalUniqueEventsTool,
   // Event Trends Tools
   getEventsPerPeriodTool,
@@ -386,6 +387,11 @@ export function buildToolsMap(): Record<string, any> {
       description: getEventFrequencyDistributionTool.description,
       inputSchema: getEventFrequencyDistributionTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getEventFrequencyDistributionTool.execute(params),
+    }),
+    'get-average-events-per-session': (tool as any)({
+      description: getAverageEventsPerSessionTool.description,
+      inputSchema: getAverageEventsPerSessionTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getAverageEventsPerSessionTool.execute(params),
     }),
     'get-total-unique-events': (tool as any)({
       description: getTotalUniqueEventsTool.description,
