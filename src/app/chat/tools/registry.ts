@@ -54,7 +54,7 @@ import {
   getMostFrequentEventsTool,
   getUniqueButtonClickUsersTool,
 } from './event-tools';
-import { getEventComparisonTool } from './event-tools/get-event-comparison';
+import { getEventComparisonTool, getSignupConversionRateTool } from './event-tools';
 
 const log = debug('umami:chat:tools');
 
@@ -452,6 +452,11 @@ export function buildToolsMap(): Record<string, any> {
       description: getEventComparisonTool.description,
       inputSchema: getEventComparisonTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getEventComparisonTool.execute(params),
+    }),
+    'get-signup-conversion-rate': (tool as any)({
+      description: getSignupConversionRateTool.description,
+      inputSchema: getSignupConversionRateTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getSignupConversionRateTool.execute(params),
     }),
   };
 }

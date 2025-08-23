@@ -51,3 +51,4 @@ export { getUniqueButtonClickUsersTool } from './get-unique-button-click-users';
 export type { GetUniqueButtonClickUsersTool } from './get-unique-button-click-users';
 
 export { getEventComparisonTool } from './get-event-comparison';
+export { getSignupConversionRateTool } from './get-signup-conversion-rate';

@@ -31,6 +31,7 @@ const seedEventDropoffs = require('./seed-event-dropoffs');
 const seedAverageEventsPerSession = require('./seed-average-events-per-session');
 const seedNewUserFirstDayEventRate = require('./seed-new-user-first-day-event-rate');
 const { seedEventComparison } = require('./seed-event-comparison');
+const { seedSignupConversionRate } = require('./seed-signup-conversion-rate');
 
 // Configuration
 const DEFAULT_WEBSITE_ID = '5801af32-ebe2-4273-9e58-89de8971a2fd';
@@ -140,6 +141,7 @@ async function main() {
     { name: 'average-events-per-session', func: seedAverageEventsPerSession },
     { name: 'new-user-first-day-event-rate', func: seedNewUserFirstDayEventRate },
     { name: 'event-comparison', func: seedEventComparison },
+    { name: 'signup-conversion-rate', func: seedSignupConversionRate },
   ];
 
   // Filter out skipped seeds
