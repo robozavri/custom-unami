@@ -22,6 +22,9 @@ export type { GetAverageEventsPerSessionTool } from './get-average-events-per-se
 export { getEventConversionFunnelTool } from './get-event-conversion-funnel';
 export type { GetEventConversionFunnelTool } from './get-event-conversion-funnel';
 
+export { getEventDropoffsTool } from './get-event-dropoffs';
+export type { GetEventDropoffsTool } from './get-event-dropoffs';
+
 export { getTotalUniqueEventsTool } from './get-total-unique-events';
 export type { GetTotalUniqueEventsTool } from './get-total-unique-events';
 

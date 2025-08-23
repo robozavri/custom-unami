@@ -43,6 +43,7 @@ import {
   getEventFrequencyDistributionTool,
   getAverageEventsPerSessionTool,
   getEventConversionFunnelTool,
+  getEventDropoffsTool,
   getTotalUniqueEventsTool,
   // Event Trends Tools
   getEventsPerPeriodTool,
@@ -398,6 +399,11 @@ export function buildToolsMap(): Record<string, any> {
       description: getEventConversionFunnelTool.description,
       inputSchema: getEventConversionFunnelTool.inputSchema as z.ZodTypeAny,
       execute: async (params: unknown) => getEventConversionFunnelTool.execute(params),
+    }),
+    'get-event-dropoffs': (tool as any)({
+      description: getEventDropoffsTool.description,
+      inputSchema: getEventDropoffsTool.inputSchema as z.ZodTypeAny,
+      execute: async (params: unknown) => getEventDropoffsTool.execute(params),
     }),
     'get-total-unique-events': (tool as any)({
       description: getTotalUniqueEventsTool.description,
