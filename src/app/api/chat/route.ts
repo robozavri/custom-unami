@@ -27,13 +27,14 @@ export async function POST(req: Request) {
   const result = streamText({
     // model: openai('gpt-3.5-turbo'),
     // model: anthropic('claude-3-haiku-20240307'),
-    model: anthropic('claude-3-5-sonnet-20240620'),
+    // model: anthropic('claude-3-5-sonnet-20240620'),
+    model: anthropic('claude-3-5-haiku-latest'),
     system: `You are a helpful AI assistant for Umami analytics. When calling any tool that accepts date parameters, ALWAYS pass the current year and current month by default unless the user specifies otherwise.
 
 IMPORTANT RULES:
 1. For tools that accept date parameters (like get-page-views), always set:
-   - date_from: current year and month (e.g., "2024-01-01" for January 2024)
-   - date_to: current year and month (e.g., "2024-01-31" for January 2024)
+   - date_from: current year and month 
+   - date_to: current year and month 
    - days: 30 (for current month) or 365 (for current year)
 
 2. If the user asks for "current" data, use the current year/month
@@ -42,7 +43,7 @@ IMPORTANT RULES:
 
 5. Always show tool results in a clear, formatted table when possible.
 
-Example: If today is January 2024, and user asks for page views, call get-page-views with date_from: "2024-01-01" and date_to: "2024-01-31"
+Example: If today is august 2025, and user asks for page views, call get-page-views with date_from: "2025-07-01" and date_to: "2025-08-31"
 Displaying data in a table is preferred.`,
     messages: [...convertToModelMessages(messages)],
     stopWhen: stepCountIs(5),

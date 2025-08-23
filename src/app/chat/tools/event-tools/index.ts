@@ -13,6 +13,9 @@ export type { GetUniqueUsersTool } from './get-unique-users';
 export { getEventFrequencyPerUserTool } from './get-event-frequency-per-user';
 export type { GetEventFrequencyPerUserTool } from './get-event-frequency-per-user';
 
+export { getEventFrequencyDistributionTool } from './get-event-frequency-distribution';
+export type { GetEventFrequencyDistributionTool } from './get-event-frequency-distribution';
+
 export { getTotalUniqueEventsTool } from './get-total-unique-events';
 export type { GetTotalUniqueEventsTool } from './get-total-unique-events';
 
