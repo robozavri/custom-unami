@@ -27,6 +27,7 @@ const seedCheckDropCorrelatedPages = require('./seed-check-drop-correlated-pages
 const seedCheckDropCorrelatedEvents = require('./seed-check-drop-correlated-events');
 const seedMostFrequentEvents = require('./seed-most-frequent-events');
 const seedEventFrequencyDistribution = require('./seed-event-frequency-distribution');
+const seedEventConversionFunnel = require('./seed-event-conversion-funnel');
 const seedAverageEventsPerSession = require('./seed-average-events-per-session');
 
 // Configuration
@@ -132,6 +133,7 @@ async function main() {
     { name: 'check-drop-correlated-events', func: seedCheckDropCorrelatedEvents },
     { name: 'most-frequent-events', func: seedMostFrequentEvents },
     { name: 'event-frequency-distribution', func: seedEventFrequencyDistribution },
+    { name: 'event-conversion-funnel', func: seedEventConversionFunnel },
     { name: 'average-events-per-session', func: seedAverageEventsPerSession },
   ];
 

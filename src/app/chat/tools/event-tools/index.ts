@@ -19,6 +19,9 @@ export type { GetEventFrequencyDistributionTool } from './get-event-frequency-di
 export { getAverageEventsPerSessionTool } from './get-average-events-per-session';
 export type { GetAverageEventsPerSessionTool } from './get-average-events-per-session';
 
+export { getEventConversionFunnelTool } from './get-event-conversion-funnel';
+export type { GetEventConversionFunnelTool } from './get-event-conversion-funnel';
+
 export { getTotalUniqueEventsTool } from './get-total-unique-events';
 export type { GetTotalUniqueEventsTool } from './get-total-unique-events';
 
