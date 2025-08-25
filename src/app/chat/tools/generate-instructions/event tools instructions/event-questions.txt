@@ -18,4 +18,4 @@ done 12. რამდენია CTR (click-through rate) კონკრეტ
     არსებული tool: get-click-through-rate (CTR)
 done 13. რამდენი წარმატებული checkout event იყო vs add_to_cart event?
 done 14. რა არის ratio “signups” vs “visits”?
-15. რომელი event-ები იწვევს crash-ს ან error-ს?
+არ გამოვა ამ ეტაპზე 15. რომელი event-ები იწვევს crash-ს ან error-ს?

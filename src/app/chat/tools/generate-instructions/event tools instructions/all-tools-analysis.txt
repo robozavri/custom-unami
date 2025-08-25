@@ -1,0 +1,51 @@
+კარგი, შევაწყვეტ ამ ფაილების წასაკითხად და მოგცემ შედეგების შეჯამებას.
+
+## Tools რომლებსაც შეუძლიათ დიდი მონაცემების დაბრუნება:
+
+### 1. **Country და Path Tables** - ძალიან დიდი შედეგები
+- `get-country-table` - აბრუნებს ყველა ქვეყნის სიას ვიზიტორების მონაცემებით
+- `get-path-table` - აბრუნებს ყველა URL path-ის სიას ვიზიტორების მონაცემებით
+- **რისკი**: თუ ბევრი ქვეყანა ან URL არის, შედეგი იქნება ძალიან დიდი
+
+### 2. **Time-series Breakdowns** - დიდი მასივები
+- `get-web-analytics-breakdown` - აბრუნებს დროის მიხედვით დაყოფილ მონაცემებს
+- **რისკი**: თუ დიდი დროის პერიოდია, მასივები იქნება ძალიან გრძელი
+
+### 3. **Event Tools** - დიდი ანალიზის შედეგები
+- `get-event-trends` - აბრუნებს მრავალი პერიოდისა და სეგმენტის მონაცემებს
+- `get-returning-event-users` - პერიოდების მასივი
+- `get-segmented-events` - სეგმენტების მასივი
+- `get-events-per-period` - პერიოდების მასივი
+
+### 4. **Session Data** - პოტენციურად დიდი
+- `getWebsiteSessions` - აბრუნებს session-ების სიას (paginated)
+- `getSessionDataProperties` - აბრუნებს session data properties-ების სიას (limit: 500)
+- `getSessionDataValues` - აბრუნებს session data values-ების სიას (limit: 100)
+
+### 5. **Reports** - ყველაზე დიდი რისკი
+- `getGoals` - ყველა goal-ის სია
+- `getAttribution` - მრავალი attribution breakdown-ის მასივი
+- `getJourney` - user journey sequences (limit: 100)
+- `getFunnel` - funnel steps-ის სია
+- `getRevenue` - მრავალი revenue chart-ის მასივი
+- `getRetention` - retention metrics-ების მასივი
+- `getUTM` - UTM parameters-ების სია
+- `getInsights` - insights-ების სია (limit: 500)
+
+### 6. **User Behavior** - დიდი მონაცემები
+- `getUserBehaviorMetrics` - user behavior metrics-ების სია (limit + offset)
+
+### 7. **Conversion Drop Insights** - დიდი ანალიზის შედეგები
+- `compare-by-segment-shift` - segment comparison data
+- `compare-by-country` - country comparison data
+- `compare-by-device` - device comparison data
+- `compare-by-path` - path comparison data
+- `compare-by-source` - source comparison data
+
+## რეკომენდაციები:
+
+1. **ყველაზე რისკიანი**: `get-country-table`, `get-path-table`, `getAttribution`, `getRevenue`
+2. **მაღალი რისკი**: `get-web-analytics-breakdown`, `get-event-trends`, `getInsights`
+3. **საშუალო რისკი**: `getWebsiteSessions`, `getGoals`, `getJourney`
+
+ეს tools-ები ყველაზე მეტად ხარჯავენ tokens-ებს, რადგან აბრუნებენ დიდ მასივებს ან მრავალ მასივს ერთდროულად.
